@@ -1,0 +1,39 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+html,
+body,
+#root {
+  height: 100%;
+  background: #080a0f;
+}
+
+@theme inline {
+  --font-display: 'DM Serif Display', serif;
+  --font-body: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --color-bg: #080a0f;
+  --color-surface: #0e1118;
+  --color-surface-2: #141720;
+  --color-border: #1e2230;
+  --color-accent: #7c6aff;
+  --color-accent-dim: #7c6aff26;
+  --color-muted: #4a5068;
+  --color-text: #e8eaf2;
+  --color-text-dim: #7a80a0;
+}
+
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
+::selection {
+  background: #7c6aff40;
+  color: #e8eaf2;
+}
