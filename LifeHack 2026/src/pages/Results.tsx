@@ -9,6 +9,7 @@ import {
 } from "recharts";
 import type { AnalysisResult } from "../analysis";
 
+// Priority badge mapping
 function PriorityBadge({ priority }: { priority: string }) {
   const isHigh = priority === "high";
   const isMed = priority === "medium";
@@ -250,9 +251,13 @@ export default function Results() {
     description: string;
   };
 
-  // Internal state to handle re-analyzed OpenAI dynamic updates
-  const [currentResult, setCurrentResult] = useState<AnalysisResult>(initialData.result);
-  const [currentDescription, setCurrentDescription] = useState<string>(initialData.description || "");
+  // State management for local edits & score recalculations
+  const [currentDescription, setCurrentDescription] = useState(
+    initialData.description || ""
+  );
+  const [currentResult, setCurrentResult] = useState<AnalysisResult>(
+    initialData.result
+  );
   const [isRefining, setIsRefining] = useState(false);
 
   // State to track user responses per question
@@ -265,11 +270,9 @@ export default function Results() {
     if (!initialData.result) navigate("/", { replace: true });
   }, [initialData.result, navigate]);
 
-  const questions = result?.questions ?? [];
-  const confidenceScore = Math.round((result?.category_confidence ?? 0.85) * 100);
-  const categoryName = result?.product_category ?? "General Product";
-
-  const categories = result?.categories ?? [];
+  const questions = currentResult?.questions ?? [];
+  const categoryName = currentResult?.product_category ?? "General Product";
+  const categories = currentResult?.categories ?? [];
 
   const [radarData, setRadarData] = useState(
     categories.map((c) => ({ subject: c.label, value: 0 }))
@@ -277,8 +280,13 @@ export default function Results() {
 
   useEffect(() => {
     if (!currentResult) return;
-    setRadarData(categories.map((c) => ({ subject: c.label, value: c.score })));
-  }, [currentResult]);
+    const t = setTimeout(() => {
+      setRadarData(
+        categories.map((c) => ({ subject: c.label, value: c.score }))
+      );
+    }, 300);
+    return () => clearTimeout(t);
+  }, [currentResult, categories]);
 
   if (!currentResult) return null;
 
@@ -295,11 +303,54 @@ export default function Results() {
     setCustomText((prev) => ({ ...prev, [questionKey]: text }));
   };
 
+  // Append user selections to description and update state
+  const handleSaveSelection = () => {
+    setIsRefining(true);
+    let appendedDetails = "\n\nAdditional Details:";
+    questions.forEach((q, idx) => {
+      const qKey = q.id || idx;
+      const selected = answers[qKey];
+      if (selected) {
+        let val = selected;
+        if (selected === "other" || selected.toLowerCase().includes("other")) {
+          val = customText[qKey] || "Other";
+        }
+        appendedDetails += `\n- ${q.question}: ${val}`;
+      }
+    });
+
+    const updatedText = `${currentDescription}${appendedDetails}`;
+    setCurrentDescription(updatedText);
+
+    // Simulated refinement: Boost category scores upon saving answers
+    const boostedCategories = categories.map((cat) => ({
+      ...cat,
+      score: Math.min(100, cat.score + 15),
+    }));
+    const newOverall = Math.min(
+      100,
+      Math.round(
+        boostedCategories.reduce((acc, c) => acc + c.score, 0) /
+          boostedCategories.length
+      )
+    );
+
+    setCurrentResult((prev) => ({
+      ...prev,
+      overall: newOverall,
+      grade: newOverall >= 85 ? "A" : "B",
+      categories: boostedCategories,
+    }));
+
+    setIsRefining(false);
+  };
+
   const exportToFile = () => {
     const lines = [
       `PRODUCT ANALYSIS RESPONSE REPORT`,
       `Category: ${categoryName}`,
-      `Overall Score: ${result.overall ?? confidenceScore}`,
+      `Overall Score: ${currentResult.overall}/100`,
+      ...categories.map((category) => `${category.label}: ${category.score}/100`),
       `Date: ${new Date().toLocaleString()}`,
       `--------------------------------------------------\n`,
     ];
@@ -307,51 +358,32 @@ export default function Results() {
     questions.forEach((q, idx) => {
       const qKey = q.id || idx;
       const selected = answers[qKey];
+      let userAns = "[No answer provided]";
 
       if (selected) {
         if (selected === "other" || selected.toLowerCase().includes("other")) {
-          const customVal = customText[qKey] || "Unspecified";
-          appendedDetails.push(`Q: ${q.question} | Answer: Other (${customVal})`);
+          userAns = `Other: ${customText[qKey] || "[No specification provided]"}`;
         } else {
-          appendedDetails.push(`Q: ${q.question} | Answer: ${selected}`);
+          userAns = selected;
         }
       }
+
+      lines.push(`Q${idx + 1}: ${q.question}`);
+      lines.push(`Category: ${q.category} | Priority: ${q.priority}`);
+      lines.push(`Answer: ${userAns}`);
+      lines.push(``);
     });
 
-    if (appendedDetails.length === 0) {
-      alert("Please answer at least one question before saving.");
-      return;
-    }
-
-    setIsRefining(true);
-
-    try {
-      const response = await fetch("http://127.0.0.1:8000/api/refine", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          original_input: currentDescription,
-          appended_info: appendedDetails.join("\n"),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update analysis.");
-      }
-
-      const resData = await response.json();
-      if (resData.success && resData.result) {
-        setCurrentResult(resData.result);
-        if (resData.refined_text) {
-          setCurrentDescription(resData.refined_text);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error sending clarifications to the server.");
-    } finally {
-      setIsRefining(false);
-    }
+    const fileContent = lines.join("\n");
+    const blob = new Blob([fileContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `clarification_answers_${Date.now()}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const preview =
@@ -359,13 +391,13 @@ export default function Results() {
       ? currentDescription.slice(0, 180).trimEnd() + "…"
       : currentDescription || "Product spec provided.";
 
-  const overallScore = result.overall ?? confidenceScore;
-  const grade = result.grade ?? (overallScore >= 85 ? "A" : overallScore >= 70 ? "B" : "C");
-  const summaryText = result.summary ?? `Analyzed category "${categoryName}" with ${questions.length} generated clarification points.`;
+  const overallScore = currentResult.overall;
+  const grade = currentResult.grade;
+  const summaryText = currentResult.summary;
 
-  const llmScore = result.llmScore ?? overallScore;
-  const llmVerdict = result.llmVerdict ?? (llmScore >= 75 ? "High Clarity" : "Moderate Gap");
-  const llmRationale = result.llmRationale ?? `The product definition has clear attributes for ${categoryName}, but needs clarification on scenario edge cases.`;
+  const llmScore = currentResult.scores?.LLM_Fit ?? 75;
+  const llmVerdict = currentResult.llmVerdict;
+  const llmRationale = currentResult.llmRationale;
 
   return (
     <div
@@ -420,7 +452,7 @@ export default function Results() {
       `}</style>
 
       <div className="results-grid">
-        {/* ── Header ── */}
+        {/* Header */}
         <div
           className="col-full"
           style={{
@@ -464,7 +496,7 @@ export default function Results() {
           </button>
         </div>
 
-        {/* ── Pentagon radar ── */}
+        {/* Radar Chart */}
         <div
           className="col-left card"
           style={{ animation: "fadeUp 0.4s ease 0.1s both" }}
@@ -538,7 +570,7 @@ export default function Results() {
           </div>
         </div>
 
-        {/* ── Score bars ── */}
+        {/* Score Bars */}
         <div
           className="col-right card"
           style={{ animation: "fadeUp 0.4s ease 0.15s both" }}
@@ -581,7 +613,7 @@ export default function Results() {
           ))}
         </div>
 
-        {/* ── Narrative summary ── */}
+        {/* Narrative Summary */}
         <div
           className="col-full card"
           style={{ animation: "fadeUp 0.4s ease 0.2s both" }}
@@ -649,7 +681,7 @@ export default function Results() {
           </div>
         </div>
 
-        {/* ── LLM discoverability ── */}
+        {/* LLM Discoverability */}
         <div
           className="col-full"
           style={{ animation: "fadeUp 0.4s ease 0.25s both" }}
@@ -661,7 +693,7 @@ export default function Results() {
           />
         </div>
 
-        {/* ── Clarification Questions Section ── */}
+        {/* Clarification Questions */}
         <div className="col-full" style={{ animation: "fadeUp 0.4s ease 0.28s both" }}>
           <p className="section-label" style={{ marginBottom: 16 }}>
             Clarification Questions ({questions.length})
@@ -718,7 +750,6 @@ export default function Results() {
                         })}
                       </div>
 
-                      {/* Conditionally show custom text input if "Other" is selected */}
                       {(selectedValue === "other" || selectedValue.toLowerCase().includes("other")) && (
                         <input
                           type="text"
@@ -777,7 +808,7 @@ export default function Results() {
           </div>
         </div>
 
-        {/* ── CTA: Save Answers & See Final Output ── */}
+        {/* Action Buttons */}
         <div
           className="col-full"
           style={{
@@ -790,7 +821,10 @@ export default function Results() {
         >
           <button
             type="button"
-            onClick={handleSaveSelection}
+            onClick={() => {
+              handleSaveSelection();
+              exportToFile();
+            }}
             disabled={isRefining}
             style={{
               fontFamily: "var(--font-mono)",
@@ -814,8 +848,8 @@ export default function Results() {
                 state: {
                   original: initialData.description,
                   originalResult: initialData.result,
-                  refined: currentDescription, // The combined text updated by backend/Save Selection
-                  refinedResult: currentResult, // The dynamic refined scores
+                  refined: currentDescription,
+                  refinedResult: currentResult,
                 },
               })
             }
