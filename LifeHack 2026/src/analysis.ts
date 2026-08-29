@@ -1,7 +1,38 @@
 export type ChallengeStatus = "PASSED" | "PARTIAL" | "FAILED";
 export type ChallengeType = "Persona" | "Context" | "Intent" | "Comparison";
 
-export type QuestionOption = { label: string; value: string };
+export type QuestionOption = {
+  label: string;
+  value: string;
+  min?: number | null;
+  max?: number | null;
+};
+
+export type EvaluationScores = {
+  Clarity: number;
+  Completeness: number;
+  Persuasiveness: number;
+  SEO_Potential: number;
+  LLM_Fit: number;
+};
+
+export type ClarificationQuestion = {
+  id: string;
+  category: string;
+  priority: "high" | "medium" | "low";
+  question: string;
+  why_it_matters: string;
+  answer_type: "multiple_choice" | "number";
+  options: QuestionOption[];
+  numeric_config: {
+    unit: string;
+    minimum: number | null;
+    maximum: number | null;
+    integer_only: boolean;
+  } | null;
+  allow_custom: boolean;
+  allow_ignore: boolean;
+};
 
 export type ChallengeQuestion = {
   question: string;
@@ -639,6 +670,10 @@ export type ScoreCategory = {
 };
 
 export type AnalysisResult = {
+  product_category: string;
+  category_confidence: number;
+  questions: ClarificationQuestion[];
+  scores: EvaluationScores;
   overall: number;
   grade: string;
   categories: ScoreCategory[];
@@ -773,6 +808,16 @@ export function analyzeDescription(text: string): AnalysisResult {
       : "This description is too sparse for AI models to extract product attributes. It will not be cited in conversational or generative search results.";
 
   return {
+    product_category: "General Product",
+    category_confidence: 0,
+    questions: [],
+    scores: {
+      Clarity: clarity,
+      Completeness: completeness,
+      Persuasiveness: persuasiveness,
+      SEO_Potential: seoScore,
+      LLM_Fit: llmScore,
+    },
     overall,
     grade,
     summary,
