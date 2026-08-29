@@ -31,4 +31,4 @@ def generate_questions(json_input: str, instructions_path: str) -> str:
 
 with open("sample.json") as js:
     testing = js.read()
-print(generate_questions(testing, "llm/question_generation.md"))
+print(generate_questions(testing, "question_generation.md"))
