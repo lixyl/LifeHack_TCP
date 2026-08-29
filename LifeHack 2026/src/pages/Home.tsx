@@ -1,5 +1,52 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import type { AnalysisResult, EvaluationScores } from "../analysis";
+
+const scoreEntries = [
+  ["Clarity", "Clarity", "#7c6aff"],
+  ["Completeness", "Completeness", "#22d3ee"],
+  ["Persuasiveness", "Persuasiveness", "#f472b6"],
+  ["SEO_Potential", "SEO Potential", "#34d399"],
+  ["LLM_Fit", "LLM Fit", "#fb923c"],
+] as const;
+
+function normalizeResult(raw: any): AnalysisResult {
+  const scores = raw?.scores as EvaluationScores | undefined;
+  if (
+    !scores ||
+    scoreEntries.some(
+      ([key]) => !Number.isInteger(scores[key]) || scores[key] < 1 || scores[key] > 100,
+    )
+  ) {
+    throw new Error("The analysis API returned incomplete or invalid scores.");
+  }
+
+  const overall = Math.round(
+    scoreEntries.reduce((sum, [key]) => sum + scores[key], 0) / scoreEntries.length,
+  );
+  const grade =
+    overall >= 85 ? "A" : overall >= 70 ? "B" : overall >= 55 ? "C" : overall >= 40 ? "D" : "F";
+  const llmVerdict =
+    scores.LLM_Fit >= 75 ? "Strong fit" : scores.LLM_Fit >= 50 ? "Moderate fit" : "Needs improvement";
+
+  return {
+    ...raw,
+    scores,
+    overall,
+    grade,
+    summary: `Five-dimension evaluation for ${raw.product_category || "this product"}.`,
+    llmScore: scores.LLM_Fit,
+    llmVerdict,
+    llmRationale:
+      "This score measures how clearly the data identifies target customers and situational use cases.",
+    categories: scoreEntries.map(([key, label, color]) => ({
+      label,
+      score: scores[key],
+      note: `${scores[key]}/100`,
+      color,
+    })),
+  };
+}
 
 export default function Home() {
   const [input, setInput] = useState("");
@@ -8,25 +55,6 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const navigate = useNavigate();
-
-  // Safely extract product title from standard JSON or raw input
-  const getProductTitle = (): string => {
-    if (!input.trim()) return "product story?";
-    try {
-      // Pre-sanitize unescaped newlines so JSON.parse won't crash on raw pastes
-      const sanitized = input.replace(/\n/g, "\\n").replace(/\r/g, "");
-      const parsed = JSON.parse(sanitized);
-
-      const data = parsed["@graph"] ? parsed["@graph"][0] : parsed;
-      const title = data.name || data.title || data.headline;
-      if (title && typeof title === "string") {
-        return title;
-      }
-    } catch {
-      // Fallback if plain text or raw malformed JSON
-    }
-    return "product story?";
-  };
 
   const handleAnalyze = async () => {
     if (!input.trim() || loading) return;
@@ -47,10 +75,11 @@ export default function Home() {
       }
 
       const data = await response.json();
+      const result = normalizeResult(data.result);
 
       navigate("/results", {
         state: {
-          result: data.result,
+          result,
           description: input,
         },
       });
@@ -117,8 +146,6 @@ export default function Home() {
   };
 
   const wordCount = input.trim().split(/\s+/).filter(Boolean).length;
-  const dynamicTitle = getProductTitle();
-
   return (
     <div
       className="flex flex-col items-center justify-center flex-1 px-6 py-12"
@@ -176,7 +203,7 @@ export default function Home() {
         >
           How good is your
           <br />
-          <em style={{ color: "var(--color-accent)" }}>{dynamicTitle}</em>
+          <em style={{ color: "var(--color-accent)" }}>product story?</em>
         </h1>
         <p
           style={{
@@ -239,7 +266,7 @@ export default function Home() {
           style={{
             display: "flex",
             alignItems: "center",
-            justifySpaceBetween: "space-between",
+            justifyContent: "space-between",
             padding: "12px 16px 16px",
             borderTop: "1px solid var(--color-border)",
           }}

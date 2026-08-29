@@ -262,26 +262,9 @@ export default function Results() {
   }, [result, navigate]);
 
   const questions = result?.questions ?? [];
-  const confidenceScore = Math.round((result?.category_confidence ?? 0.85) * 100);
   const categoryName = result?.product_category ?? "General Product";
 
-  // Force exact 5 pentagon vertices for the radar chart
-  const pentagonCategories = [
-    { key: "context", label: "Context", color: "#7c6aff" },
-    { key: "special_scenarios", label: "Scenarios", color: "#38bdf8" },
-    { key: "personas", label: "Personas", color: "#f59e0b" },
-    { key: "product_attribute", label: "Attributes", color: "#4ade80" },
-    { key: "benefits", label: "Benefits", color: "#f87171" },
-  ];
-
-  const categories = pentagonCategories.map((cat) => {
-    const count = questions.filter((q) => q.category === cat.key).length;
-    return {
-      label: cat.label,
-      score: Math.min(100, Math.max(30, count * 35)),
-      color: cat.color,
-    };
-  });
+  const categories = result?.categories ?? [];
 
   const [radarData, setRadarData] = useState(
     categories.map((c) => ({ subject: c.label, value: 0 }))
@@ -316,7 +299,8 @@ export default function Results() {
     const lines = [
       `PRODUCT ANALYSIS RESPONSE REPORT`,
       `Category: ${categoryName}`,
-      `Overall Score: ${result.overall ?? confidenceScore}`,
+      `Overall Score: ${result.overall}/100`,
+      ...categories.map((category) => `${category.label}: ${category.score}/100`),
       `Date: ${new Date().toLocaleString()}`,
       `--------------------------------------------------\n`,
     ];
@@ -357,13 +341,13 @@ export default function Results() {
       ? description.slice(0, 180).trimEnd() + "…"
       : description || "Product spec provided.";
 
-  const overallScore = result.overall ?? confidenceScore;
-  const grade = result.grade ?? (overallScore >= 85 ? "A" : overallScore >= 70 ? "B" : "C");
-  const summaryText = result.summary ?? `Analyzed category "${categoryName}" with ${questions.length} generated clarification points.`;
+  const overallScore = result.overall;
+  const grade = result.grade;
+  const summaryText = result.summary;
 
-  const llmScore = result.llmScore ?? overallScore;
-  const llmVerdict = result.llmVerdict ?? (llmScore >= 75 ? "High Clarity" : "Moderate Gap");
-  const llmRationale = result.llmRationale ?? `The product definition has clear attributes for ${categoryName}, but needs clarification on scenario edge cases.`;
+  const llmScore = result.scores.LLM_Fit;
+  const llmVerdict = result.llmVerdict;
+  const llmRationale = result.llmRationale;
 
   return (
     <div
