@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { AnalysisResult, EvaluationScores } from "../analysis";
 
 const scoreEntries = [
@@ -49,7 +49,11 @@ function normalizeResult(raw: any): AnalysisResult {
 }
 
 export default function Home() {
-  const [input, setInput] = useState("");
+  const location = useLocation();
+  const prefillDescription = (
+    location.state as { prefillDescription?: string } | null
+  )?.prefillDescription;
+  const [input, setInput] = useState(() => prefillDescription ?? "");
   const [loading, setLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);

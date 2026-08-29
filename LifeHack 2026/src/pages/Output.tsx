@@ -210,10 +210,14 @@ export default function Output() {
 
   // Handler to run analysis again using the new refined text
   function handleReAnalyze() {
-    navigate("/results", {
+    const descriptionToRefine =
+      questionAnswerString && questionAnswerString !== "[]"
+        ? questionAnswerString
+        : refined || original;
+
+    navigate("/", {
       state: {
-        text: refined,
-        previousResult: refinedResult,
+        prefillDescription: descriptionToRefine,
       },
     });
   }
