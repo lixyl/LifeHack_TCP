@@ -151,7 +151,12 @@ export default function Output() {
 
   const origCategories = originalResult?.categories ?? categories.map(c => ({ ...c, score: Math.max(30, c.score - 20) }));
 
-  const llmScore = refinedResult?.llmScore ?? refScore;
+  // Keep the bottom discoverability reading synchronized with the updated
+  // LLM Fit category rendered in the score comparison above.
+  const llmScore =
+    categories.find(
+      (category) => category.label.toLowerCase().replace(/[^a-z]/g, "") === "llmfit"
+    )?.score ?? refinedResult?.llmScore ?? refScore;
   const llmVerdict = refinedResult?.llmVerdict ?? (llmScore >= 75 ? "High Clarity" : "Moderate Gap");
   const llmRationale = refinedResult?.llmRationale ?? "The appended answers resolved critical ambiguity for edge cases.";
 
