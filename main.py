@@ -220,16 +220,3 @@ async def refine_endpoint(payload: RefineRequest):
         print("Error refining analysis:", e)
         raise HTTPException(status_code=500, detail=str(e))
 
-class ReanalyzeRequest(BaseModel):
-    updated_json_input: str
-
-@app.post("/api/reanalyze")
-async def reanalyze_endpoint(payload: ReanalyzeRequest):
-    try:
-        # Use instructions.md to re-generate the full structure and instructions1.md for scores
-        result = generate_questions(payload.updated_json_input, instructions_filename="instructions.md")
-        result["scores"] = generate_scores(payload.updated_json_input, instructions_filename="instructions1.md")
-        return {"success": True, "result": result}
-    except Exception as e:
-        print("Error re-analyzing:", e)
-        raise HTTPException(status_code=500, detail=str(e))
