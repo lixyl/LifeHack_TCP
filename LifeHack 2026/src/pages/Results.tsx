@@ -747,6 +747,7 @@ export default function Results() {
           }}
         >
           <button
+            type="button"
             onClick={exportToFile}
             style={{
               fontFamily: "var(--font-mono)",
@@ -761,7 +762,7 @@ export default function Results() {
               transition: "opacity 0.15s, transform 0.1s",
             }}
           >
-            Save Selections (.txt)
+            Save Selection
           </button>
           <button
             onClick={() => navigate("/challenge", { state: { result, description, userAnswers: answers } })}
