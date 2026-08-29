@@ -260,6 +260,7 @@ export default function Results() {
   const [answers, setAnswers] = useState<Record<string | number, string>>({});
   const [customText, setCustomText] = useState<Record<string | number, string>>({});
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
 
   useEffect(() => {
     if (!initialData.result) navigate("/", { replace: true });
@@ -282,8 +283,8 @@ export default function Results() {
     return () => clearTimeout(t);
   }, [currentResult, categories]);
 
-  // Recalculates description and refined scores automatically on answer change
-  const updateRefinedState = (
+  // Call the backend /api/reanalyze endpoint with updated JSON string containing answers
+  const triggerReanalysis = async (
     newAnswers: Record<string | number, string>,
     newCustomText: Record<string | number, string>
   ) => {
@@ -304,48 +305,56 @@ export default function Results() {
     });
 
     const baseDescription = initialData.description || "";
-    setCurrentDescription(
-      answeredCount > 0 ? `${baseDescription}${appendedDetails}` : baseDescription
-    );
+    const updatedDesc =
+      answeredCount > 0 ? `${baseDescription}${appendedDetails}` : baseDescription;
+    setCurrentDescription(updatedDesc);
 
-    // Dynamic score boost scaled by answered questions
-    const boost = answeredCount * 5;
-    const boostedCategories = (initialData.result?.categories ?? []).map((cat) => ({
-      ...cat,
-      score: Math.min(100, cat.score + boost),
-    }));
-    const newOverall = Math.min(
-      100,
-      Math.round(
-        boostedCategories.reduce((acc, c) => acc + c.score, 0) /
-          (boostedCategories.length || 1)
-      )
-    );
+    if (answeredCount === 0) return;
 
-    setCurrentResult((prev) => ({
-      ...prev,
-      overall: newOverall,
-      grade: newOverall >= 85 ? "A" : newOverall >= 70 ? "B" : "C",
-      categories: boostedCategories,
-    }));
+    setIsReanalyzing(true);
+    try {
+      // Construct a payload mimicking the product JSON structure with updated description
+      let productObj: any = {};
+      try {
+        productObj = JSON.parse(baseDescription);
+      } catch {
+        productObj = { description: baseDescription };
+      }
+      productObj.description = updatedDesc;
+
+      const response = await fetch("http://localhost:8000/api/reanalyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updated_json_input: JSON.stringify(productObj) }),
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success && data.result) {
+        setCurrentResult(data.result);
+      }
+    } catch (err) {
+      console.error("Failed to re-analyze state:", err);
+    } finally {
+      setIsReanalyzing(false);
+    }
   };
 
   const handleSelectOption = (questionKey: string | number, optionVal: string) => {
     const updatedAnswers = { ...answers, [questionKey]: optionVal };
     setAnswers(updatedAnswers);
-    updateRefinedState(updatedAnswers, customText);
+    triggerReanalysis(updatedAnswers, customText);
   };
 
   const handleInputChange = (questionKey: string | number, value: string) => {
     const updatedAnswers = { ...answers, [questionKey]: value };
     setAnswers(updatedAnswers);
-    updateRefinedState(updatedAnswers, customText);
+    triggerReanalysis(updatedAnswers, customText);
   };
 
   const handleCustomTextChange = (questionKey: string | number, text: string) => {
     const updatedCustom = { ...customText, [questionKey]: text };
     setCustomText(updatedCustom);
-    updateRefinedState(answers, updatedCustom);
+    triggerReanalysis(answers, updatedCustom);
   };
 
   const serializeQuestionAnswers = () => {
@@ -497,7 +506,7 @@ export default function Results() {
         >
           <div>
             <p className="section-label" style={{ marginBottom: 4 }}>
-              Analysis complete
+              Analysis complete {isReanalyzing && " • Re-evaluating scores..."}
             </p>
             <h2
               style={{
@@ -849,7 +858,7 @@ export default function Results() {
         >
           <button
             onClick={handleGenerateOutput}
-            disabled={isGenerating}
+            disabled={isGenerating || isReanalyzing}
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: 13,
@@ -858,13 +867,13 @@ export default function Results() {
               border: "none",
               borderRadius: 10,
               padding: "12px 28px",
-              cursor: isGenerating ? "wait" : "pointer",
-              opacity: isGenerating ? 0.65 : 1,
+              cursor: isGenerating || isReanalyzing ? "wait" : "pointer",
+              opacity: isGenerating || isReanalyzing ? 0.65 : 1,
               letterSpacing: "0.04em",
               transition: "opacity 0.15s, transform 0.1s",
             }}
           >
-            {isGenerating ? "Generating…" : "See Final Output →"}
+            {isGenerating ? "Generating…" : isReanalyzing ? "Updating Scores..." : "See Final Output →"}
           </button>
         </div>
       </div>
