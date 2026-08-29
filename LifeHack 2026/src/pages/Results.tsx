@@ -259,6 +259,7 @@ export default function Results() {
 
   const [answers, setAnswers] = useState<Record<string | number, string>>({});
   const [customText, setCustomText] = useState<Record<string | number, string>>({});
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     if (!initialData.result) navigate("/", { replace: true });
@@ -345,6 +346,81 @@ export default function Results() {
     const updatedCustom = { ...customText, [questionKey]: text };
     setCustomText(updatedCustom);
     updateRefinedState(answers, updatedCustom);
+  };
+
+  const serializeQuestionAnswers = () => {
+    const pairs = questions.flatMap((question, index) => {
+      const questionKey = question.id || index;
+      const selected = answers[questionKey]?.trim();
+
+      if (!selected) return [];
+
+      const isOther =
+        selected === "other" || selected.toLowerCase().includes("other");
+      const option = question.options?.find(
+        ({ value, label }) => value === selected || label === selected
+      );
+
+      let answer = isOther
+        ? customText[questionKey]?.trim()
+        : option?.label ?? selected;
+
+      if (!answer) return [];
+
+      if (question.answer_type === "number" && question.numeric_config?.unit) {
+        answer = `${answer} ${question.numeric_config.unit}`;
+      }
+
+      return [{ question: question.question, answer }];
+    });
+
+    return JSON.stringify(pairs);
+  };
+
+  const handleGenerateOutput = async () => {
+    if (isGenerating) return;
+
+    setIsGenerating(true);
+    const clarificationAnswers = serializeQuestionAnswers();
+
+    try {
+      const response = await fetch(
+        "http://localhost:8000/api/generate-description",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            json_input: initialData.description,
+            clarification_answers: clarificationAnswers,
+          }),
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Description generation failed");
+      }
+      if (typeof data.generated_json !== "string") {
+        throw new Error("The description API returned an invalid response");
+      }
+
+      navigate("/output", {
+        state: {
+          original: initialData.description,
+          originalResult: initialData.result,
+          refined: currentDescription,
+          refinedResult: currentResult,
+          questionAnswerString: data.generated_json,
+        },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Description generation failed";
+      console.error("Description generation error:", error);
+      alert(message);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   if (!currentResult) return null;
@@ -772,17 +848,8 @@ export default function Results() {
           }}
         >
           <button
-            onClick={() =>
-              navigate("/output", {
-                state: {
-                  original: initialData.description,
-                  originalResult: initialData.result,
-                  refined: currentDescription,
-                  refinedResult: currentResult,
-                  userAnswers: answers,
-                },
-              })
-            }
+            onClick={handleGenerateOutput}
+            disabled={isGenerating}
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: 13,
@@ -791,12 +858,13 @@ export default function Results() {
               border: "none",
               borderRadius: 10,
               padding: "12px 28px",
-              cursor: "pointer",
+              cursor: isGenerating ? "wait" : "pointer",
+              opacity: isGenerating ? 0.65 : 1,
               letterSpacing: "0.04em",
               transition: "opacity 0.15s, transform 0.1s",
             }}
           >
-            See Final Output →
+            {isGenerating ? "Generating…" : "See Final Output →"}
           </button>
         </div>
       </div>

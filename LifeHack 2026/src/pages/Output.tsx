@@ -7,6 +7,7 @@ type OutputState = {
   originalResult: AnalysisResult;
   refined: string;
   refinedResult: AnalysisResult;
+  questionAnswerString: string;
 };
 
 // ── Delta bar ─────────────────────────────────────────────────────────────────
@@ -119,7 +120,13 @@ export default function Output() {
   const location = useLocation();
   const navigate = useNavigate();
   const state = (location.state ?? {}) as OutputState;
-  const { original, originalResult, refined, refinedResult } = state;
+  const {
+    original,
+    originalResult,
+    refined,
+    refinedResult,
+    questionAnswerString = "[]",
+  } = state;
 
   useEffect(() => {
     if (!original && !refined) navigate("/", { replace: true });
@@ -267,6 +274,17 @@ export default function Output() {
           <p style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--color-text)", lineHeight: 1.8, margin: 0, whiteSpace: "pre-wrap" }}>
             {refined}
           </p>
+        </div>
+
+        {/* Question-answer context prepared for descriptor generation */}
+        <div className="out-card out-full" style={{ animation: "fadeUp 0.4s ease 0.18s both" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+            <p className="out-label" style={{ margin: 0 }}>Clarification Answers</p>
+            <CopyButton text={questionAnswerString} />
+          </div>
+          <pre style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text)", lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+            {questionAnswerString}
+          </pre>
         </div>
 
         {/* Original side by side */}

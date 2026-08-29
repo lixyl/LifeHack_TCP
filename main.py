@@ -1,14 +1,12 @@
 import json
 import re
-import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel
-from openai import OpenAI
 
 app = FastAPI()
 
@@ -39,6 +37,11 @@ class AnalyzeRequest(BaseModel):
 class RefineRequest(BaseModel):
     original_input: str
     appended_info: str
+
+
+class GenerateDescriptionRequest(BaseModel):
+    json_input: str
+    clarification_answers: str
 
 
 def generate_questions(json_input: str, instructions_filename: str = "instructions.md") -> Any:
@@ -121,6 +124,51 @@ def generate_scores(json_input: str, instructions_filename: str = "instructions1
         raise ValueError("Evaluator returned an empty response")
     return parse_scores(content)
 
+
+def generate_description_json(
+    json_input: str,
+    clarification_answers: str,
+    instructions_filename: str = "instruction2.md",
+) -> str:
+    """Generate a descriptor and append it to the input object's description."""
+    product_data = json.loads(json_input)
+    clarification_data = json.loads(clarification_answers)
+
+    if not isinstance(product_data, dict):
+        raise ValueError("Product JSON must contain an object")
+    if not isinstance(clarification_data, list):
+        raise ValueError("Clarification answers must contain a JSON array")
+
+    base_dir = Path(__file__).resolve().parent
+    instructions = (base_dir / instructions_filename).read_text(encoding="utf-8")
+    user_prompt = (
+        "Generate the requested product descriptor using the following data.\n\n"
+        "ORIGINAL PRODUCT JSON:\n"
+        f"{json.dumps(product_data, ensure_ascii=False, indent=2)}\n\n"
+        "CLARIFICATION ANSWERS:\n"
+        f"{json.dumps(clarification_data, ensure_ascii=False, indent=2)}"
+    )
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": user_prompt},
+        ],
+    )
+    generated_description = response.choices[0].message.content
+    if not generated_description:
+        raise ValueError("The LLM returned an empty description")
+
+    existing_description = str(product_data.get("description", "")).strip()
+    product_data["description"] = "\n\n".join(
+        part
+        for part in (existing_description, generated_description.strip())
+        if part
+    )
+
+    return json.dumps(product_data, ensure_ascii=False, indent=2)
+
 @app.post("/api/analyze")
 async def analyze_endpoint(payload: AnalyzeRequest):
     print("--- RECEIVED JSON INPUT ---")
@@ -133,6 +181,21 @@ async def analyze_endpoint(payload: AnalyzeRequest):
         return {"success": True, "result": result}
     except Exception as e:
         print("Error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/generate-description")
+async def generate_description_endpoint(payload: GenerateDescriptionRequest):
+    try:
+        generated_json = generate_description_json(
+            json_input=payload.json_input,
+            clarification_answers=payload.clarification_answers,
+        )
+        return {"success": True, "generated_json": generated_json}
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON input: {e}")
+    except Exception as e:
+        print("Description generation error:", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
