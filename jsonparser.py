@@ -4,19 +4,15 @@ from collections import Counter
 from typing import Any, Dict, List
 from openai import OpenAI
 
-# Initialize OpenAI client (requires OPENAI_API_KEY environment variable)
-# Note: Never hardcode sensitive API keys directly in scripts shared publicly.
 client = OpenAI(api_key="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")
 
 
 def load_json_ld(file_path: str) -> Dict[str, Any]:
-    """Loads and returns JSON-LD content from a file."""
     with open(file_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def identify_broad_product_type(json_ld: Dict[str, Any]) -> str:
-    """Uses GPT to identify the high-level broad product category from JSON-LD."""
     prompt = f"""
     Given the following JSON-LD representation of a product, identify its broad product category/type 
     (e.g., 'Wireless Noise-Canceling Headphones', 'Smart Robot Vacuum', 'Mechanical Gaming Keyboard').
@@ -35,9 +31,7 @@ def identify_broad_product_type(json_ld: Dict[str, Any]) -> str:
 
 
 def generate_search_queries(product_type: str) -> List[str]:
-    """Generates 10 industry search queries based on the product type."""
     try:
-        # FIXED: Added missing OpenAI completion request block
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
@@ -66,7 +60,6 @@ def generate_search_queries(product_type: str) -> List[str]:
 
     try:
         clean_content = message.content.strip()
-        # Clean markdown wrappers if returned
         if clean_content.startswith("```"):
             lines = clean_content.split("\n")
             if lines[0].startswith("```"):
@@ -76,7 +69,6 @@ def generate_search_queries(product_type: str) -> List[str]:
             clean_content = "\n".join(lines).strip()
 
         data = json.loads(clean_content)
-        # Handle structural extract variations safely
         if isinstance(data, dict) and "queries" in data:
             return data["queries"]
         elif isinstance(data, list):
@@ -91,9 +83,6 @@ def generate_search_queries(product_type: str) -> List[str]:
 def execute_searches_and_extract_features(
     queries: List[str], product_type: str
 ) -> Counter:
-    """
-    Simulates finding top industry features for the queries using high-quality LLM prompts.
-    """
     print("\n[+] Extracting market feature profiles for each query...")
 
     all_extracted_features = []
@@ -109,7 +98,6 @@ def execute_searches_and_extract_features(
         """
 
         try:
-            # FIXED: Corrected non-standard client.responses.create endpoint to chat.completions
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 response_format={"type": "json_object"},
@@ -146,9 +134,7 @@ def execute_searches_and_extract_features(
 def analyze_gap_and_similarity(
     json_ld: Dict[str, Any], feature_counts: Counter, product_type: str
 ) -> Dict[str, Any]:
-    """Compares market-frequent features against JSON-LD file content."""
-    # Capture the top 15 features based on simulated frequency counts
-    most_common_market_features = [feature for feature, count in feature_counts.most_common(15)]
+    most_common_market_features = [feature for feature, count in feature_counts.most_common(30)]
 
     analysis_prompt = f"""
     You are an e-commerce taxonomy expert analyzing product schema completeness.
@@ -184,17 +170,10 @@ def analyze_gap_and_similarity(
 
 
 def process_product_json_ld(file_path: str):
-    """Main pipeline execution."""
     print(f"--- Processing File: {file_path} ---")
-
-    # Step 1: Load file
     json_ld_data = load_json_ld(file_path)
-
-    # Step 2: Identify broad product type
     product_type = identify_broad_product_type(json_ld_data)
     print(f"[+] Broad Product Type Identified: '{product_type}'")
-
-    # Step 3: Generate 10 search queries
     queries = generate_search_queries(product_type)
     print(f"[+] Generated {len(queries)} Search Queries:")
     for q in queries:
@@ -203,14 +182,8 @@ def process_product_json_ld(file_path: str):
     if not queries:
         print("[-] Aborting remaining pipeline pipeline because no queries were built.")
         return
-
-    # Step 4: Execute feature extraction
     feature_counts = execute_searches_and_extract_features(queries, product_type)
-
-    # Step 5 & 6: Compare, compute similarity, and get missing features
     analysis = analyze_gap_and_similarity(json_ld_data, feature_counts, product_type)
-
-    # Print Final Output Summary
     print("\n================ FINAL ANALYSIS OUTPUT ================")
     print(f"Product Type:               {product_type}")
     print(f"Feature Similarity Score:   {analysis.get('similarity_score_percentage')}%")
@@ -224,8 +197,6 @@ def process_product_json_ld(file_path: str):
 
 if __name__ == "__main__":
     sample_file = "dummy.json"
-
-    # Create standard mock dataset if dummy.json is absent
     if not os.path.exists(sample_file):
         dummy_json_ld = {
             "@context": "https://schema.org/",
