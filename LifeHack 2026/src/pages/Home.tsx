@@ -5,23 +5,121 @@ import { analyzeDescription } from "../analysis";
 export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const navigate = useNavigate();
 
-  const handleAnalyze = () => {
+  // Parse product title dynamically from JSON-LD input
+  const getProductTitle = (): string => {
+    if (!input.trim()) return "product story?";
+    try {
+      const parsed = JSON.parse(input);
+
+      // Handle Schema.org Graph arrays (@graph)
+      const data = parsed["@graph"] ? parsed["@graph"][0] : parsed;
+
+      // Extract product name or title from standard schema properties
+      const title = data.name || data.title || data.headline;
+      if (title && typeof title === "string") {
+        return title;
+      }
+    } catch {
+      // If parsing fails (plain text or incomplete JSON), fallback
+    }
+    return "product story?";
+  };
+
+  const handleAnalyze = async () => {
     if (!input.trim() || loading) return;
     setLoading(true);
-    setTimeout(() => {
-      const result = analyzeDescription(input);
-      navigate("/results", { state: { result, description: input } });
-    }, 1600);
+
+    try {
+      const response = await fetch("http://localhost:8000/api/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ json_input: input }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to analyze product JSON");
+      }
+
+      const data = await response.json();
+
+      // Navigate to results page with backend response
+      navigate("/results", { 
+        state: { 
+          result: data.result, 
+          description: input 
+        } 
+      });
+    } catch (error) {
+      console.error(error);
+      alert("Error processing JSON input.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleAnalyze();
   };
 
+  const processFile = (file: File) => {
+    if (
+      !file.name.endsWith(".jsonld") &&
+      !file.name.endsWith(".json") &&
+      file.type !== "application/json" &&
+      file.type !== "application/ld+json"
+    ) {
+      alert("Please upload a valid .json or .jsonld file.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const parsed = JSON.parse(text);
+        setInput(JSON.stringify(parsed, null, 2));
+      } catch {
+        setInput(e.target?.result as string);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
+  };
+
   const wordCount = input.trim().split(/\s+/).filter(Boolean).length;
+  const dynamicTitle = getProductTitle();
 
   return (
     <div
@@ -42,6 +140,15 @@ export default function Home() {
         .dot-3 { animation: pulse-dot 1.2s ease-in-out infinite 0.4s; }
         textarea:focus { outline: none; }
       `}</style>
+
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".jsonld,.json,application/json,application/ld+json"
+        style={{ display: "none" }}
+      />
 
       {/* Headline */}
       <div
@@ -71,7 +178,7 @@ export default function Home() {
         >
           How good is your
           <br />
-          <em style={{ color: "var(--color-accent)" }}>product story?</em>
+          <em style={{ color: "var(--color-accent)" }}>{dynamicTitle}</em>
         </h1>
         <p
           style={{
@@ -82,23 +189,25 @@ export default function Home() {
             margin: "0 auto",
           }}
         >
-          Paste any product description below. We'll score its clarity,
-          completeness, persuasiveness, SEO strength, and LLM discoverability
-          — instantly.
+          Paste any product description or upload a JSON-LD file below. We'll score its clarity,
+          completeness, persuasiveness, SEO strength, and LLM discoverability — instantly.
         </p>
       </div>
 
-      {/* Input card */}
+      {/* Input card with Drag & Drop */}
       <div
         className="chat-card"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         style={{
           width: "100%",
           background: "var(--color-surface)",
-          border: "1px solid var(--color-border)",
+          border: `1px solid ${isDragging ? "var(--color-accent)" : "var(--color-border)"}`,
           borderRadius: 16,
           marginBottom: 20,
           animation: "fadeUp 0.5s ease 0.1s both",
-          transition: "border-color 0.2s",
+          transition: "border-color 0.2s, background 0.2s",
         }}
         onFocusCapture={(e) =>
           ((e.currentTarget as HTMLDivElement).style.borderColor =
@@ -114,7 +223,7 @@ export default function Home() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKey}
-          placeholder="Paste your product description here…"
+          placeholder="Paste your product description or JSON-LD here, or drop a file…"
           rows={7}
           style={{
             width: "100%",
@@ -137,15 +246,33 @@ export default function Home() {
             borderTop: "1px solid var(--color-border)",
           }}
         >
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              color: "var(--color-muted)",
-            }}
-          >
-            {wordCount} words · ⌘↵ to analyze
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                color: "var(--color-muted)",
+              }}
+            >
+              {wordCount} words · ⌘↵ to analyze
+            </span>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "var(--color-accent)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                cursor: "pointer",
+                padding: 0,
+                textDecoration: "underline",
+              }}
+            >
+              Upload JSON-LD
+            </button>
+          </div>
           <button
             onClick={handleAnalyze}
             disabled={!input.trim() || loading}
