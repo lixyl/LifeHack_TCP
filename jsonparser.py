@@ -38,7 +38,7 @@ def generate_search_queries(product_type: str) -> List[str]:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an e-commerce SEO expert. Respond ONLY with a JSON object containing a key 'queries' which maps to an array of 10 highly distinct, market-relevant search query strings or buying guides for the given product type."
+                    "content": "You are an e-commerce SEO expert. Respond ONLY with a JSON object containing a key 'queries' which maps to an array of 10 highly distinct, market-relevant search query strings or buying guides for the given product type. This should mimic a consumer's search query that is highly conversational, context heavy, without very specific or professional key words. "
                 },
                 {
                     "role": "user",
@@ -91,10 +91,12 @@ def execute_searches_and_extract_features(
         print(f"  ({idx}/{len(queries)}) Extracting specifications for: '{query}'...")
         prompt = f"""
         Act as a market research tool evaluating: "{query}".
-        What are the top 5 key technical features, specifications, capabilities, and standards 
+        Extract the top 5 search results and read the respective production information pages. 
+        What are the top 20 key technical features, specifications, capabilities, and standards 
         frequently evaluated by consumers and experts for the industry segment: '{product_type}'?
+        Compare and extract common qualitative features. For quantitative features, note the interval range that contains the data levels of top search results. 
         
-        Return ONLY a JSON array of specific standard feature strings (e.g. ["Battery Life", "Active Noise Cancellation", "Multipoint Bluetooth"]).
+        Return ONLY a JSON array of specific standard feature strings (e.g. ["Battery Life > 1 year", "Active Noise Cancellation", "Multipoint Bluetooth", "Sugar level < 5%"]).
         """
 
         try:
@@ -134,7 +136,7 @@ def execute_searches_and_extract_features(
 def analyze_gap_and_similarity(
     json_ld: Dict[str, Any], feature_counts: Counter, product_type: str
 ) -> Dict[str, Any]:
-    most_common_market_features = [feature for feature, count in feature_counts.most_common(30)]
+    most_common_market_features = [feature for feature, count in feature_counts.most_common(20)]
 
     analysis_prompt = f"""
     You are an e-commerce taxonomy expert analyzing product schema completeness.
@@ -142,13 +144,13 @@ def analyze_gap_and_similarity(
     1. Original Product JSON-LD:
     {json.dumps(json_ld, indent=2)}
 
-    2. Top 30 Most Frequently Occurring Industry Features found in search results for broad type '{product_type}':
+    2. Top 20 Most Frequently Occurring Industry Features found in search results for broad type '{product_type}':
     {json.dumps(most_common_market_features, indent=2)}
 
     Perform the following analysis:
     - Compare the original JSON-LD against these top market features.
     - Calculate a similarity/coverage percentage score (0% to 100%) indicating how well the JSON-LD covers standard market features, by dividing the number of features found in the json file against the total number of key features found.
-    - Identify key standard features present in the market search results that are MISSING or NOT explicitly detailed in the JSON-LD.
+    - Identify key standard features present in the market search results that are MISSING, NOT MATCHED or NOT explicitly detailed in the JSON-LD.
 
     Output format: Return ONLY a valid JSON object matching this schema:
     {{
