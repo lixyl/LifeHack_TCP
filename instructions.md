@@ -79,20 +79,21 @@ Assign every question one of these priorities:
 
 ## STEP 5 — SELECT THE ANSWER TYPE
 
-Use `multiple_choice` when the answer is best represented by named categories. Supply 3–5 concise, relevant, non-overlapping options that cover the most likely answers.
+### Multiple Choice (Qualitative Questions)
+Use `multiple_choice` when the answer is best represented by named categories. 
+* You MUST provide EXACTLY 4 options in the `options` array.
+* The first 3 options must be concise, relevant, non-overlapping, specific choices.
+* The 4th option MUST be an "Other" option (`{"label": "Other (please specify)", "value": "other", "min": null, "max": null}`) allowing the user to specify custom input.
 
-Use `number` when the most useful answer is a measurable quantity, such as weight, length, capacity, battery life, temperature, quantity, duration, price, or warranty period.
-
-For a numerical question:
-
+### Number (Quantitative Questions)
+Use `number` when the most useful answer is a measurable quantity (e.g., weight, length, capacity, battery life, duration, price).
 * Ask for one specific measurement only.
 * State the expected unit in `numeric_config.unit`.
 * Set sensible `minimum` and `maximum` bounds when they can be determined without inventing product facts; otherwise use `null`.
 * Set `integer_only` to `true` only when fractional values would not make sense.
-* Include 3–5 useful range options in `options` when sensible, plus an exact-value option. If meaningful ranges cannot be created without unsupported assumptions, include only the exact-value option.
-* Use option objects. For a range, provide `min` and `max`; for an exact numerical response, set both to `null`.
+* For numerical questions, DO NOT generate range options. The `options` array MUST contain EXACTLY ONE option object for exact free input: `{"label": "Provide exact value", "value": "exact_value", "min": null, "max": null}`.
 
-Every question must allow a custom answer and an ignore/not-applicable response through the corresponding boolean fields. Do not add these choices to the `options` array.
+Every question must set `allow_custom: true` and `allow_ignore: true`.
 
 ## OUTPUT REQUIREMENTS
 
@@ -103,7 +104,8 @@ Return only one valid JSON object as a JSON-formatted string.
 * Use double quotes for all keys and string values.
 * Do not include trailing commas.
 * The `questions` array MUST contain EXACTLY 10 question objects. Outputting fewer or more than 10 questions is strictly invalid.
-* Keep `questions` as a JSON array and each question's `options` as its own JSON array.
+* For `multiple_choice` questions, the `options` array MUST contain EXACTLY 4 options (3 defined choices + 1 "Other" option).
+* For `number` questions, the `options` array MUST contain EXACTLY 1 option (`exact_value`), relying on single quantitative free input.
 * Use `null` for `numeric_config` on multiple-choice questions.
 * Do not invent product information in the output.
 
@@ -123,8 +125,26 @@ Use this exact structure:
       "answer_type": "multiple_choice",
       "options": [
         {
-          "label": "...",
-          "value": "...",
+          "label": "Option 1",
+          "value": "option_1",
+          "min": null,
+          "max": null
+        },
+        {
+          "label": "Option 2",
+          "value": "option_2",
+          "min": null,
+          "max": null
+        },
+        {
+          "label": "Option 3",
+          "value": "option_3",
+          "min": null,
+          "max": null
+        },
+        {
+          "label": "Other (please specify)",
+          "value": "other",
           "min": null,
           "max": null
         }
@@ -142,21 +162,15 @@ Use this exact structure:
       "answer_type": "number",
       "options": [
         {
-          "label": "Provide an exact value",
+          "label": "Provide exact value",
           "value": "exact_value",
           "min": null,
           "max": null
-        },
-        {
-          "label": "...",
-          "value": "range_1",
-          "min": 0,
-          "max": 0
         }
       ],
       "numeric_config": {
-        "unit": "...",
-        "minimum": null,
+        "unit": "kg",
+        "minimum": 0,
         "maximum": null,
         "integer_only": false
       },

@@ -57,7 +57,7 @@ function ScoreBar({
       <div
         style={{
           display: "flex",
-          justifySpaceBetween: "space-between",
+          justifyContent: "space-between",
           marginBottom: 7,
         }}
       >
@@ -253,6 +253,8 @@ export default function Results() {
 
   // State to track user responses per question
   const [answers, setAnswers] = useState<Record<string | number, string>>({});
+  // State to track open-ended text input when "Other" is selected
+  const [customText, setCustomText] = useState<Record<string | number, string>>({});
 
   // Redirect home if landed without data
   useEffect(() => {
@@ -298,12 +300,16 @@ export default function Results() {
   if (!result) return null;
 
   // Handlers for user choices
-  const handleSelectOption = (questionKey: string | number, optionLabel: string) => {
-    setAnswers((prev) => ({ ...prev, [questionKey]: optionLabel }));
+  const handleSelectOption = (questionKey: string | number, optionVal: string) => {
+    setAnswers((prev) => ({ ...prev, [questionKey]: optionVal }));
   };
 
   const handleInputChange = (questionKey: string | number, value: string) => {
     setAnswers((prev) => ({ ...prev, [questionKey]: value }));
+  };
+
+  const handleCustomTextChange = (questionKey: string | number, text: string) => {
+    setCustomText((prev) => ({ ...prev, [questionKey]: text }));
   };
 
   const exportToFile = () => {
@@ -317,7 +323,17 @@ export default function Results() {
 
     questions.forEach((q, idx) => {
       const qKey = q.id || idx;
-      const userAns = answers[qKey] || "[No answer provided]";
+      const selected = answers[qKey];
+      let userAns = "[No answer provided]";
+
+      if (selected) {
+        if (selected === "other" || selected.toLowerCase().includes("other")) {
+          userAns = `Other: ${customText[qKey] || "[No specification provided]"}`;
+        } else {
+          userAns = selected;
+        }
+      }
+
       lines.push(`Q${idx + 1}: ${q.question}`);
       lines.push(`Category: ${q.category} | Priority: ${q.priority}`);
       lines.push(`Answer: ${userAns}`);
@@ -673,30 +689,55 @@ export default function Results() {
                   </p>
 
                   {q.answer_type === "multiple_choice" && q.options && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {q.options.map((opt, i) => {
-                        const isSelected = selectedValue === opt.label;
-                        return (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => handleSelectOption(qKey, opt.label)}
-                            style={{
-                              fontFamily: "var(--font-mono)",
-                              fontSize: 11,
-                              color: isSelected ? "#fff" : "var(--color-text-dim)",
-                              background: isSelected ? "var(--color-accent)" : "var(--color-surface-2)",
-                              border: isSelected ? "1px solid var(--color-accent)" : "1px solid var(--color-border)",
-                              borderRadius: 8,
-                              padding: "6px 12px",
-                              cursor: "pointer",
-                              transition: "all 0.15s ease",
-                            }}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {q.options.map((opt, i) => {
+                          const optionTarget = opt.value || opt.label;
+                          const isSelected = selectedValue === optionTarget || selectedValue === opt.label;
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => handleSelectOption(qKey, optionTarget)}
+                              style={{
+                                fontFamily: "var(--font-mono)",
+                                fontSize: 11,
+                                color: isSelected ? "#fff" : "var(--color-text-dim)",
+                                background: isSelected ? "var(--color-accent)" : "var(--color-surface-2)",
+                                border: isSelected ? "1px solid var(--color-accent)" : "1px solid var(--color-border)",
+                                borderRadius: 8,
+                                padding: "6px 12px",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Conditionally show custom text input if "Other" is selected */}
+                      {(selectedValue === "other" || selectedValue.toLowerCase().includes("other")) && (
+                        <input
+                          type="text"
+                          placeholder="Please specify..."
+                          value={customText[qKey] || ""}
+                          onChange={(e) => handleCustomTextChange(qKey, e.target.value)}
+                          style={{
+                            fontFamily: "var(--font-body)",
+                            fontSize: 13,
+                            color: "var(--color-text)",
+                            background: "var(--color-surface-2)",
+                            border: "1px solid var(--color-accent)",
+                            borderRadius: 8,
+                            padding: "8px 12px",
+                            outline: "none",
+                            width: "100%",
+                            maxWidth: 400,
+                          }}
+                        />
+                      )}
                     </div>
                   )}
 
@@ -765,7 +806,7 @@ export default function Results() {
             Save Selection
           </button>
           <button
-            onClick={() => navigate("/challenge", { state: { result, description, userAnswers: answers } })}
+            onClick={() => navigate("/challenge", { state: { result, description, userAnswers: answers, customAnswers: customText } })}
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: 13,
