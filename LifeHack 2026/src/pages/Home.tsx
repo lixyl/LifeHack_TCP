@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
-import { useNavigate } from "react-router";
-import { analyzeDescription } from "../analysis";
+import { useNavigate } from "react-router-dom";
 
 export default function Home() {
   const [input, setInput] = useState("");
@@ -10,22 +9,21 @@ export default function Home() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const navigate = useNavigate();
 
-  // Parse product title dynamically from JSON-LD input
+  // Safely extract product title from standard JSON or raw input
   const getProductTitle = (): string => {
     if (!input.trim()) return "product story?";
     try {
-      const parsed = JSON.parse(input);
+      // Pre-sanitize unescaped newlines so JSON.parse won't crash on raw pastes
+      const sanitized = input.replace(/\n/g, "\\n").replace(/\r/g, "");
+      const parsed = JSON.parse(sanitized);
 
-      // Handle Schema.org Graph arrays (@graph)
       const data = parsed["@graph"] ? parsed["@graph"][0] : parsed;
-
-      // Extract product name or title from standard schema properties
       const title = data.name || data.title || data.headline;
       if (title && typeof title === "string") {
         return title;
       }
     } catch {
-      // If parsing fails (plain text or incomplete JSON), fallback
+      // Fallback if plain text or raw malformed JSON
     }
     return "product story?";
   };
@@ -44,21 +42,21 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to analyze product JSON");
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to analyze product JSON");
       }
 
       const data = await response.json();
 
-      // Navigate to results page with backend response
-      navigate("/results", { 
-        state: { 
-          result: data.result, 
-          description: input 
-        } 
+      navigate("/results", {
+        state: {
+          result: data.result,
+          description: input,
+        },
       });
-    } catch (error) {
-      console.error(error);
-      alert("Error processing JSON input.");
+    } catch (error: any) {
+      console.error("API Error:", error);
+      alert(error.message || "Error processing JSON input.");
     } finally {
       setLoading(false);
     }
@@ -241,7 +239,7 @@ export default function Home() {
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
+            justifySpaceBetween: "space-between",
             padding: "12px 16px 16px",
             borderTop: "1px solid var(--color-border)",
           }}
