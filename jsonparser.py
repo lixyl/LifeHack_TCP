@@ -156,12 +156,12 @@ def analyze_gap_and_similarity(
     1. Original Product JSON-LD:
     {json.dumps(json_ld, indent=2)}
 
-    2. Top 15 Most Frequently Occurring Industry Features found in search results for broad type '{product_type}':
+    2. Top 30 Most Frequently Occurring Industry Features found in search results for broad type '{product_type}':
     {json.dumps(most_common_market_features, indent=2)}
 
     Perform the following analysis:
     - Compare the original JSON-LD against these top market features.
-    - Calculate a similarity/coverage percentage score (0% to 100%) indicating how well the JSON-LD covers standard market features.
+    - Calculate a similarity/coverage percentage score (0% to 100%) indicating how well the JSON-LD covers standard market features, by dividing the number of features found in the json file against the total number of key features found.
     - Identify key standard features present in the market search results that are MISSING or NOT explicitly detailed in the JSON-LD.
 
     Output format: Return ONLY a valid JSON object matching this schema:
