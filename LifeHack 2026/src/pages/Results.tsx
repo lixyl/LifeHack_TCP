@@ -9,6 +9,31 @@ import {
 } from "recharts";
 import type { AnalysisResult } from "../analysis";
 
+// Priority badge mapping
+function PriorityBadge({ priority }: { priority: string }) {
+  const isHigh = priority === "high";
+  const isMed = priority === "medium";
+  const color = isHigh ? "#f87171" : isMed ? "#f59e0b" : "#4ade80";
+
+  return (
+    <span
+      style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 10,
+        color,
+        border: `1px solid ${color}50`,
+        background: `${color}14`,
+        borderRadius: 12,
+        padding: "2px 8px",
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+      }}
+    >
+      {priority} priority
+    </span>
+  );
+}
+
 // ── Animated score bar ────────────────────────────────────────────────────────
 function ScoreBar({
   label,
@@ -231,15 +256,37 @@ export default function Results() {
     if (!result) navigate("/", { replace: true });
   }, [result, navigate]);
 
+  const questions = result?.questions ?? [];
+  const confidenceScore = Math.round((result?.category_confidence ?? 0.85) * 100);
+  const categoryName = result?.product_category ?? "General Product";
+
+  // Force exact 5 pentagon vertices for the radar chart
+  const pentagonCategories = [
+    { key: "context", label: "Context", color: "#7c6aff" },
+    { key: "special_scenarios", label: "Scenarios", color: "#38bdf8" },
+    { key: "personas", label: "Personas", color: "#f59e0b" },
+    { key: "product_attribute", label: "Attributes", color: "#4ade80" },
+    { key: "benefits", label: "Benefits", color: "#f87171" },
+  ];
+
+  const categories = pentagonCategories.map((cat) => {
+    const count = questions.filter((q) => q.category === cat.key).length;
+    return {
+      label: cat.label,
+      score: Math.min(100, Math.max(30, count * 35)),
+      color: cat.color,
+    };
+  });
+
   const [radarData, setRadarData] = useState(
-    result?.categories.map((c) => ({ subject: c.label, value: 0 })) ?? []
+    categories.map((c) => ({ subject: c.label, value: 0 }))
   );
 
   useEffect(() => {
     if (!result) return;
     const t = setTimeout(() => {
       setRadarData(
-        result.categories.map((c) => ({ subject: c.label, value: c.score }))
+        categories.map((c) => ({ subject: c.label, value: c.score }))
       );
     }, 300);
     return () => clearTimeout(t);
@@ -248,9 +295,17 @@ export default function Results() {
   if (!result) return null;
 
   const preview =
-    description.length > 180
+    description && description.length > 180
       ? description.slice(0, 180).trimEnd() + "…"
-      : description;
+      : description || "Product spec provided.";
+
+  const overallScore = result.overall ?? confidenceScore;
+  const grade = result.grade ?? (overallScore >= 85 ? "A" : overallScore >= 70 ? "B" : "C");
+  const summaryText = result.summary ?? `Analyzed category "${categoryName}" with ${questions.length} generated clarification points.`;
+
+  const llmScore = result.llmScore ?? overallScore;
+  const llmVerdict = result.llmVerdict ?? (llmScore >= 75 ? "High Clarity" : "Moderate Gap");
+  const llmRationale = result.llmRationale ?? `The product definition has clear attributes for ${categoryName}, but needs clarification on scenario edge cases.`;
 
   return (
     <div
@@ -296,7 +351,6 @@ export default function Results() {
           margin-bottom: 14px;
         }
 
-        /* recharts pentagon styling */
         .recharts-polar-grid-concentric-polygon { fill: none; }
         .recharts-polar-angle-axis-tick-value {
           font-family: var(--font-mono) !important;
@@ -307,7 +361,7 @@ export default function Results() {
 
       <div className="results-grid">
 
-        {/* ── Back + title ── */}
+        {/* ── Header ── */}
         <div
           className="col-full"
           style={{
@@ -345,18 +399,6 @@ export default function Results() {
               padding: "8px 16px",
               cursor: "pointer",
               transition: "border-color 0.15s, color 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor =
-                "var(--color-accent)";
-              (e.currentTarget as HTMLButtonElement).style.color =
-                "var(--color-accent)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor =
-                "var(--color-border)";
-              (e.currentTarget as HTMLButtonElement).style.color =
-                "var(--color-text-dim)";
             }}
           >
             ← New analysis
@@ -402,7 +444,6 @@ export default function Results() {
               </RadarChart>
             </ResponsiveContainer>
           </div>
-          {/* Legend dots */}
           <div
             style={{
               display: "flex",
@@ -411,7 +452,7 @@ export default function Results() {
               marginTop: 4,
             }}
           >
-            {result.categories.map((c) => (
+            {categories.map((c) => (
               <div
                 key={c.label}
                 style={{ display: "flex", alignItems: "center", gap: 6 }}
@@ -453,7 +494,7 @@ export default function Results() {
           >
             <div>
               <p className="section-label">Overall score</p>
-              <GradeBadge grade={result.grade} score={result.overall} />
+              <GradeBadge grade={grade} score={overallScore} />
             </div>
             <div style={{ textAlign: "right", maxWidth: 160 }}>
               <p
@@ -465,12 +506,12 @@ export default function Results() {
                   margin: 0,
                 }}
               >
-                {result.summary}
+                {summaryText}
               </p>
             </div>
           </div>
           <p className="section-label">Metrics breakdown</p>
-          {result.categories.map((c, i) => (
+          {categories.map((c, i) => (
             <ScoreBar
               key={c.label}
               label={c.label}
@@ -494,7 +535,6 @@ export default function Results() {
               gap: 20,
             }}
           >
-            {/* Input preview */}
             <div>
               <p
                 style={{
@@ -522,7 +562,6 @@ export default function Results() {
                 {preview}
               </p>
             </div>
-            {/* AI verdict */}
             <div>
               <p
                 style={{
@@ -545,32 +584,8 @@ export default function Results() {
                   margin: 0,
                 }}
               >
-                {result.summary}
+                {summaryText}
               </p>
-              <div
-                style={{
-                  marginTop: 14,
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 8,
-                }}
-              >
-                {result.categories.map((c) => (
-                  <span
-                    key={c.label}
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 10,
-                      color: c.color,
-                      background: `${c.color}14`,
-                      borderRadius: 20,
-                      padding: "3px 10px",
-                    }}
-                  >
-                    {c.label}: {c.score}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
         </div>
@@ -581,10 +596,76 @@ export default function Results() {
           style={{ animation: "fadeUp 0.4s ease 0.25s both" }}
         >
           <LLMIndicator
-            score={result.llmScore}
-            verdict={result.llmVerdict}
-            rationale={result.llmRationale}
+            score={llmScore}
+            verdict={llmVerdict}
+            rationale={llmRationale}
           />
+        </div>
+
+        {/* ── Clarification Questions Section ── */}
+        <div className="col-full" style={{ animation: "fadeUp 0.4s ease 0.28s both" }}>
+          <p className="section-label" style={{ marginBottom: 16 }}>
+            Clarification Questions ({questions.length})
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {questions.map((q, idx) => (
+              <div key={q.id || idx} className="card" style={{ padding: "20px 24px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--color-text-dim)", textTransform: "uppercase" }}>
+                    {q.category.replace("_", " ")}
+                  </span>
+                  <PriorityBadge priority={q.priority} />
+                </div>
+
+                <h4 style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--color-text)", margin: "0 0 6px 0" }}>
+                  {q.question}
+                </h4>
+
+                <p style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--color-text-dim)", margin: "0 0 14px 0" }}>
+                  <strong style={{ color: "var(--color-text)" }}>Why it matters: </strong>
+                  {q.why_it_matters}
+                </p>
+
+                {q.answer_type === "multiple_choice" && q.options && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {q.options.map((opt, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 11,
+                          color: "var(--color-text-dim)",
+                          background: "var(--color-surface-2)",
+                          border: "1px solid var(--color-border)",
+                          borderRadius: 8,
+                          padding: "4px 10px",
+                        }}
+                      >
+                        {opt.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {q.answer_type === "number" && q.numeric_config && (
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11,
+                      color: "var(--color-accent)",
+                      background: "var(--color-surface-2)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: 8,
+                      padding: "6px 12px",
+                      display: "inline-block",
+                    }}
+                  >
+                    Expected unit: <strong>{q.numeric_config.unit}</strong>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* ── CTA: Challenge Lab ── */}
@@ -594,6 +675,7 @@ export default function Results() {
             animation: "fadeUp 0.4s ease 0.3s both",
             display: "flex",
             justifyContent: "flex-end",
+            marginTop: 10,
           }}
         >
           <button
@@ -610,10 +692,6 @@ export default function Results() {
               letterSpacing: "0.04em",
               transition: "opacity 0.15s, transform 0.1s",
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.85"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
-            onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
-            onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
           >
             Run AI Challenge Lab →
           </button>
