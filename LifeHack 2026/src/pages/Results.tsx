@@ -9,7 +9,6 @@ import {
 } from "recharts";
 import type { AnalysisResult } from "../analysis";
 
-// Priority badge mapping
 function PriorityBadge({ priority }: { priority: string }) {
   const isHigh = priority === "high";
   const isMed = priority === "medium";
@@ -246,10 +245,15 @@ function LLMIndicator({
 export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { result, description } = (location.state ?? {}) as {
+  const initialData = (location.state ?? {}) as {
     result: AnalysisResult;
     description: string;
   };
+
+  // Internal state to handle re-analyzed OpenAI dynamic updates
+  const [currentResult, setCurrentResult] = useState<AnalysisResult>(initialData.result);
+  const [currentDescription, setCurrentDescription] = useState<string>(initialData.description || "");
+  const [isRefining, setIsRefining] = useState(false);
 
   // State to track user responses per question
   const [answers, setAnswers] = useState<Record<string | number, string>>({});
@@ -258,12 +262,12 @@ export default function Results() {
 
   // Redirect home if landed without data
   useEffect(() => {
-    if (!result) navigate("/", { replace: true });
-  }, [result, navigate]);
+    if (!initialData.result) navigate("/", { replace: true });
+  }, [initialData.result, navigate]);
 
-  const questions = result?.questions ?? [];
-  const confidenceScore = Math.round((result?.category_confidence ?? 0.85) * 100);
-  const categoryName = result?.product_category ?? "General Product";
+  const questions = currentResult?.questions ?? [];
+  const confidenceScore = Math.round((currentResult?.category_confidence ?? 0.85) * 100);
+  const categoryName = currentResult?.product_category ?? "General Product";
 
   // Force exact 5 pentagon vertices for the radar chart
   const pentagonCategories = [
@@ -288,16 +292,11 @@ export default function Results() {
   );
 
   useEffect(() => {
-    if (!result) return;
-    const t = setTimeout(() => {
-      setRadarData(
-        categories.map((c) => ({ subject: c.label, value: c.score }))
-      );
-    }, 300);
-    return () => clearTimeout(t);
-  }, [result]);
+    if (!currentResult) return;
+    setRadarData(categories.map((c) => ({ subject: c.label, value: c.score })));
+  }, [currentResult]);
 
-  if (!result) return null;
+  if (!currentResult) return null;
 
   // Handlers for user choices
   const handleSelectOption = (questionKey: string | number, optionVal: string) => {
@@ -312,58 +311,71 @@ export default function Results() {
     setCustomText((prev) => ({ ...prev, [questionKey]: text }));
   };
 
-  const exportToFile = () => {
-    const lines = [
-      `PRODUCT ANALYSIS RESPONSE REPORT`,
-      `Category: ${categoryName}`,
-      `Overall Score: ${result.overall ?? confidenceScore}`,
-      `Date: ${new Date().toLocaleString()}`,
-      `--------------------------------------------------\n`,
-    ];
+  const handleSaveSelection = async () => {
+    const appendedDetails: string[] = [];
 
     questions.forEach((q, idx) => {
       const qKey = q.id || idx;
       const selected = answers[qKey];
-      let userAns = "[No answer provided]";
 
       if (selected) {
         if (selected === "other" || selected.toLowerCase().includes("other")) {
-          userAns = `Other: ${customText[qKey] || "[No specification provided]"}`;
+          const customVal = customText[qKey] || "Unspecified";
+          appendedDetails.push(`Q: ${q.question} | Answer: Other (${customVal})`);
         } else {
-          userAns = selected;
+          appendedDetails.push(`Q: ${q.question} | Answer: ${selected}`);
         }
       }
-
-      lines.push(`Q${idx + 1}: ${q.question}`);
-      lines.push(`Category: ${q.category} | Priority: ${q.priority}`);
-      lines.push(`Answer: ${userAns}`);
-      lines.push(``);
     });
 
-    const fileContent = lines.join("\n");
-    const blob = new Blob([fileContent], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `clarification_answers_${Date.now()}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    if (appendedDetails.length === 0) {
+      alert("Please answer at least one question before saving.");
+      return;
+    }
+
+    setIsRefining(true);
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          original_input: currentDescription,
+          appended_info: appendedDetails.join("\n"),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update analysis.");
+      }
+
+      const resData = await response.json();
+      if (resData.success && resData.result) {
+        setCurrentResult(resData.result);
+        if (resData.refined_text) {
+          setCurrentDescription(resData.refined_text);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error sending clarifications to the server.");
+    } finally {
+      setIsRefining(false);
+    }
   };
 
   const preview =
-    description && description.length > 180
-      ? description.slice(0, 180).trimEnd() + "…"
-      : description || "Product spec provided.";
+    currentDescription && currentDescription.length > 180
+      ? currentDescription.slice(0, 180).trimEnd() + "…"
+      : currentDescription || "Product spec provided.";
 
-  const overallScore = result.overall ?? confidenceScore;
-  const grade = result.grade ?? (overallScore >= 85 ? "A" : overallScore >= 70 ? "B" : "C");
-  const summaryText = result.summary ?? `Analyzed category "${categoryName}" with ${questions.length} generated clarification points.`;
+  const overallScore = currentResult.overall ?? confidenceScore;
+  const grade = currentResult.grade ?? (overallScore >= 85 ? "A" : overallScore >= 70 ? "B" : "C");
+  const summaryText = currentResult.summary ?? `Analyzed category "${categoryName}" with ${questions.length} generated clarification points.`;
 
-  const llmScore = result.llmScore ?? overallScore;
-  const llmVerdict = result.llmVerdict ?? (llmScore >= 75 ? "High Clarity" : "Moderate Gap");
-  const llmRationale = result.llmRationale ?? `The product definition has clear attributes for ${categoryName}, but needs clarification on scenario edge cases.`;
+  const llmScore = currentResult.llmScore ?? overallScore;
+  const llmVerdict = currentResult.llmVerdict ?? (llmScore >= 75 ? "High Clarity" : "Moderate Gap");
+  const llmRationale = currentResult.llmRationale ?? `The product definition has clear attributes for ${categoryName}, but needs clarification on scenario edge cases.`;
 
   return (
     <div
@@ -418,7 +430,6 @@ export default function Results() {
       `}</style>
 
       <div className="results-grid">
-
         {/* ── Header ── */}
         <div
           className="col-full"
@@ -776,7 +787,7 @@ export default function Results() {
           </div>
         </div>
 
-        {/* ── CTA: Challenge Lab & Save Answers ── */}
+        {/* ── CTA: Save Answers & See Final Output ── */}
         <div
           className="col-full"
           style={{
@@ -789,7 +800,8 @@ export default function Results() {
         >
           <button
             type="button"
-            onClick={exportToFile}
+            onClick={handleSaveSelection}
+            disabled={isRefining}
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: 13,
@@ -798,15 +810,25 @@ export default function Results() {
               border: "1px solid var(--color-border)",
               borderRadius: 10,
               padding: "12px 20px",
-              cursor: "pointer",
+              cursor: isRefining ? "not-allowed" : "pointer",
               letterSpacing: "0.04em",
+              opacity: isRefining ? 0.6 : 1,
               transition: "opacity 0.15s, transform 0.1s",
             }}
           >
-            Save Selection
+            {isRefining ? "Refining scores..." : "Save Selection"}
           </button>
           <button
-            onClick={() => navigate("/challenge", { state: { result, description, userAnswers: answers, customAnswers: customText } })}
+            onClick={() =>
+              navigate("/output", {
+                state: {
+                  original: initialData.description,
+                  originalResult: initialData.result,
+                  refined: currentDescription, // The combined text updated by backend/Save Selection
+                  refinedResult: currentResult, // The dynamic refined scores
+                },
+              })
+            }
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: 13,
@@ -820,7 +842,7 @@ export default function Results() {
               transition: "opacity 0.15s, transform 0.1s",
             }}
           >
-            Run AI Challenge Lab →
+            See Final Output →
           </button>
         </div>
       </div>
