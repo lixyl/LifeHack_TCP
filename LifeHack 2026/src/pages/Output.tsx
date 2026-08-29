@@ -129,7 +129,6 @@ export default function Output() {
 
   const COLORS = ["#7c6aff", "#22d3ee", "#f472b6", "#34d399", "#fb923c"];
 
-  // Normalize fallback scores in case properties aren't explicitly passed
   const origScore = originalResult?.overall ?? 60;
   const origGrade = originalResult?.grade ?? "C";
   const refScore = refinedResult?.overall ?? Math.min(100, origScore + 25);
@@ -148,6 +147,16 @@ export default function Output() {
   const llmScore = refinedResult?.llmScore ?? refScore;
   const llmVerdict = refinedResult?.llmVerdict ?? (llmScore >= 75 ? "High Clarity" : "Moderate Gap");
   const llmRationale = refinedResult?.llmRationale ?? "The appended answers resolved critical ambiguity for edge cases.";
+
+  // Handler to run analysis again using the new refined text
+  function handleReAnalyze() {
+    navigate("/results", {
+      state: {
+        text: refined,
+        previousResult: refinedResult,
+      },
+    });
+  }
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "40px 24px" }}>
@@ -177,6 +186,25 @@ export default function Output() {
           text-transform: uppercase;
           color: var(--color-text-dim);
           margin-bottom: 14px;
+        }
+        .btn-refine {
+          font-family: var(--font-mono);
+          font-size: 12px;
+          background: var(--color-accent, #7c6aff);
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 18px;
+          cursor: pointer;
+          transition: opacity 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          letter-spacing: 0.04em;
+          font-weight: 500;
+        }
+        .btn-refine:hover {
+          opacity: 0.9;
         }
         @media (max-width: 680px) {
           .out-grid { grid-template-columns: 1fr; }
@@ -227,9 +255,14 @@ export default function Output() {
 
         {/* Refined description */}
         <div className="out-card out-full" style={{ animation: "fadeUp 0.4s ease 0.14s both" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
             <p className="out-label" style={{ margin: 0 }}>Full Appended Description</p>
-            <CopyButton text={refined} />
+            <div style={{ display: "flex", gap: 10 }}>
+              <CopyButton text={refined} />
+              <button onClick={handleReAnalyze} className="btn-refine">
+                <span>↻</span> Refine further
+              </button>
+            </div>
           </div>
           <p style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--color-text)", lineHeight: 1.8, margin: 0, whiteSpace: "pre-wrap" }}>
             {refined}

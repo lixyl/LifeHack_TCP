@@ -207,7 +207,6 @@ function LLMIndicator({
           {verdict}
         </span>
       </div>
-      {/* Score track */}
       <div
         style={{
           height: 4,
@@ -251,27 +250,21 @@ export default function Results() {
     description: string;
   };
 
-  // State management for local edits & score recalculations
   const [currentDescription, setCurrentDescription] = useState(
     initialData.description || ""
   );
   const [currentResult, setCurrentResult] = useState<AnalysisResult>(
     initialData.result
   );
-  const [isRefining, setIsRefining] = useState(false);
 
-  // State to track user responses per question
   const [answers, setAnswers] = useState<Record<string | number, string>>({});
-  // State to track open-ended text input when "Other" is selected
   const [customText, setCustomText] = useState<Record<string | number, string>>({});
 
-  // Redirect home if landed without data
   useEffect(() => {
     if (!initialData.result) navigate("/", { replace: true });
   }, [initialData.result, navigate]);
 
   const questions = currentResult?.questions ?? [];
-  const categoryName = currentResult?.product_category ?? "General Product";
   const categories = currentResult?.categories ?? [];
 
   const [radarData, setRadarData] = useState(
@@ -288,103 +281,73 @@ export default function Results() {
     return () => clearTimeout(t);
   }, [currentResult, categories]);
 
-  if (!currentResult) return null;
-
-  // Handlers for user choices
-  const handleSelectOption = (questionKey: string | number, optionVal: string) => {
-    setAnswers((prev) => ({ ...prev, [questionKey]: optionVal }));
-  };
-
-  const handleInputChange = (questionKey: string | number, value: string) => {
-    setAnswers((prev) => ({ ...prev, [questionKey]: value }));
-  };
-
-  const handleCustomTextChange = (questionKey: string | number, text: string) => {
-    setCustomText((prev) => ({ ...prev, [questionKey]: text }));
-  };
-
-  // Append user selections to description and update state
-  const handleSaveSelection = () => {
-    setIsRefining(true);
+  // Recalculates description and refined scores automatically on answer change
+  const updateRefinedState = (
+    newAnswers: Record<string | number, string>,
+    newCustomText: Record<string | number, string>
+  ) => {
     let appendedDetails = "\n\nAdditional Details:";
+    let answeredCount = 0;
+
     questions.forEach((q, idx) => {
       const qKey = q.id || idx;
-      const selected = answers[qKey];
+      const selected = newAnswers[qKey];
       if (selected) {
+        answeredCount++;
         let val = selected;
         if (selected === "other" || selected.toLowerCase().includes("other")) {
-          val = customText[qKey] || "Other";
+          val = newCustomText[qKey] || "Other";
         }
         appendedDetails += `\n- ${q.question}: ${val}`;
       }
     });
 
-    const updatedText = `${currentDescription}${appendedDetails}`;
-    setCurrentDescription(updatedText);
+    const baseDescription = initialData.description || "";
+    setCurrentDescription(
+      answeredCount > 0 ? `${baseDescription}${appendedDetails}` : baseDescription
+    );
 
-    // Simulated refinement: Boost category scores upon saving answers
-    const boostedCategories = categories.map((cat) => ({
+    // Dynamic score boost scaled by answered questions
+    const boost = answeredCount * 5;
+    const boostedCategories = (initialData.result?.categories ?? []).map((cat) => ({
       ...cat,
-      score: Math.min(100, cat.score + 15),
+      score: Math.min(100, cat.score + boost),
     }));
     const newOverall = Math.min(
       100,
       Math.round(
         boostedCategories.reduce((acc, c) => acc + c.score, 0) /
-          boostedCategories.length
+          (boostedCategories.length || 1)
       )
     );
 
     setCurrentResult((prev) => ({
       ...prev,
       overall: newOverall,
-      grade: newOverall >= 85 ? "A" : "B",
+      grade: newOverall >= 85 ? "A" : newOverall >= 70 ? "B" : "C",
       categories: boostedCategories,
     }));
-
-    setIsRefining(false);
   };
 
-  const exportToFile = () => {
-    const lines = [
-      `PRODUCT ANALYSIS RESPONSE REPORT`,
-      `Category: ${categoryName}`,
-      `Overall Score: ${currentResult.overall}/100`,
-      ...categories.map((category) => `${category.label}: ${category.score}/100`),
-      `Date: ${new Date().toLocaleString()}`,
-      `--------------------------------------------------\n`,
-    ];
-
-    questions.forEach((q, idx) => {
-      const qKey = q.id || idx;
-      const selected = answers[qKey];
-      let userAns = "[No answer provided]";
-
-      if (selected) {
-        if (selected === "other" || selected.toLowerCase().includes("other")) {
-          userAns = `Other: ${customText[qKey] || "[No specification provided]"}`;
-        } else {
-          userAns = selected;
-        }
-      }
-
-      lines.push(`Q${idx + 1}: ${q.question}`);
-      lines.push(`Category: ${q.category} | Priority: ${q.priority}`);
-      lines.push(`Answer: ${userAns}`);
-      lines.push(``);
-    });
-
-    const fileContent = lines.join("\n");
-    const blob = new Blob([fileContent], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `clarification_answers_${Date.now()}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const handleSelectOption = (questionKey: string | number, optionVal: string) => {
+    const updatedAnswers = { ...answers, [questionKey]: optionVal };
+    setAnswers(updatedAnswers);
+    updateRefinedState(updatedAnswers, customText);
   };
+
+  const handleInputChange = (questionKey: string | number, value: string) => {
+    const updatedAnswers = { ...answers, [questionKey]: value };
+    setAnswers(updatedAnswers);
+    updateRefinedState(updatedAnswers, customText);
+  };
+
+  const handleCustomTextChange = (questionKey: string | number, text: string) => {
+    const updatedCustom = { ...customText, [questionKey]: text };
+    setCustomText(updatedCustom);
+    updateRefinedState(answers, updatedCustom);
+  };
+
+  if (!currentResult) return null;
 
   const preview =
     currentDescription && currentDescription.length > 180
@@ -400,13 +363,7 @@ export default function Results() {
   const llmRationale = currentResult.llmRationale;
 
   return (
-    <div
-      style={{
-        flex: 1,
-        overflowY: "auto",
-        padding: "40px 24px",
-      }}
-    >
+    <div style={{ flex: 1, overflowY: "auto", padding: "40px 24px" }}>
       <style>{`
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(14px); }
@@ -511,11 +468,7 @@ export default function Results() {
           >
             <ResponsiveContainer width="100%" height={280}>
               <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="72%">
-                <PolarGrid
-                  gridType="polygon"
-                  stroke="#1e2230"
-                  strokeWidth={1}
-                />
+                <PolarGrid gridType="polygon" stroke="#1e2230" strokeWidth={1} />
                 <PolarAngleAxis
                   dataKey="subject"
                   tick={{ fontFamily: "var(--font-mono)", fontSize: 11, fill: "#7a80a0" }}
@@ -808,40 +761,16 @@ export default function Results() {
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Button */}
         <div
           className="col-full"
           style={{
             animation: "fadeUp 0.4s ease 0.3s both",
             display: "flex",
             justifyContent: "flex-end",
-            gap: 12,
             marginTop: 10,
           }}
         >
-          <button
-            type="button"
-            onClick={() => {
-              handleSaveSelection();
-              exportToFile();
-            }}
-            disabled={isRefining}
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 13,
-              background: "var(--color-surface-2)",
-              color: "var(--color-text)",
-              border: "1px solid var(--color-border)",
-              borderRadius: 10,
-              padding: "12px 20px",
-              cursor: isRefining ? "not-allowed" : "pointer",
-              letterSpacing: "0.04em",
-              opacity: isRefining ? 0.6 : 1,
-              transition: "opacity 0.15s, transform 0.1s",
-            }}
-          >
-            {isRefining ? "Refining scores..." : "Save Selection"}
-          </button>
           <button
             onClick={() =>
               navigate("/output", {
@@ -850,6 +779,7 @@ export default function Results() {
                   originalResult: initialData.result,
                   refined: currentDescription,
                   refinedResult: currentResult,
+                  userAnswers: answers,
                 },
               })
             }
