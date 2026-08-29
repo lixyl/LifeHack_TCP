@@ -7,6 +7,9 @@ import type {
   ChallengeType,
   ChallengeStatus,
 } from "../analysis";
+import { normalizeReadiness, readinessFromChallenges } from "../readiness";
+import type { Readiness } from "../readiness";
+import { getReadiness, runStressTest, submitAnswer } from "../services/api";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -20,6 +23,12 @@ const STATUS_COLOR: Record<ChallengeStatus, string> = {
   PASSED: "#4ade80",
   PARTIAL: "#f59e0b",
   FAILED: "#f87171",
+};
+
+const STATUS_LABEL: Record<ChallengeStatus, string> = {
+  PASSED: "PASS",
+  PARTIAL: "PARTIAL",
+  FAILED: "FAIL",
 };
 
 const FILTERS: Array<"All" | ChallengeType> = [
@@ -66,19 +75,34 @@ function ConfBar({ confidence, status }: { confidence: number; status: Challenge
 function InlinePanel({
   challenge,
   onClose,
+  onReadinessUpdate,
 }: {
   challenge: Challenge;
   onClose: () => void;
+  onReadinessUpdate: (readiness: Readiness) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [freeText, setFreeText] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const { panel } = challenge;
 
-  function handleSubmit() {
-    if (!selected && !freeText.trim()) return;
-    setSubmitted(true);
+  async function handleSubmit() {
+    if ((!selected && !freeText.trim()) || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const answer = freeText.trim() || selected || "";
+      const response = await submitAnswer(challenge.id, answer);
+      onReadinessUpdate(normalizeReadiness(response.readiness));
+      setSubmitted(true);
+    } catch {
+      setError("We couldn't update this answer. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (submitted) {
@@ -222,7 +246,7 @@ function InlinePanel({
       {/* Submit */}
       <button
         onClick={handleSubmit}
-        disabled={!selected && !freeText.trim()}
+        disabled={(!selected && !freeText.trim()) || submitting}
         className="term-btn"
         style={{
           color: selected || freeText.trim() ? "var(--color-accent)" : "var(--color-muted)",
@@ -243,8 +267,9 @@ function InlinePanel({
           (e.currentTarget as HTMLButtonElement).style.color = selected || freeText.trim() ? "var(--color-accent)" : "var(--color-muted)";
         }}
       >
-        [ Update Knowledge ]
+        {submitting ? "[ Updating... ]" : "[ Update Knowledge ]"}
       </button>
+      {error && <p role="alert" style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "#f87171", margin: "10px 0 0" }}>{error}</p>}
     </div>
   );
 }
@@ -256,11 +281,13 @@ function ChallengeCard({
   index,
   expanded,
   onToggle,
+  onReadinessUpdate,
 }: {
   c: Challenge;
   index: number;
   expanded: boolean;
   onToggle: () => void;
+  onReadinessUpdate: (readiness: Readiness) => void;
 }) {
   const color = STATUS_COLOR[c.status];
   const sym = STATUS_SYMBOL[c.status];
@@ -278,7 +305,7 @@ function ChallengeCard({
             {c.type} Challenge
           </span>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color, letterSpacing: "0.1em" }}>
-            {sym} {c.status}
+            {sym} {STATUS_LABEL[c.status]}
           </span>
         </div>
 
@@ -295,6 +322,10 @@ function ChallengeCard({
             Missing: <span style={{ color: "#f59e0b" }}>{c.missing}</span>
           </p>
         )}
+
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-dim)", lineHeight: 1.55, margin: "12px 0 0" }}>
+          {c.panel.whyFailed}
+        </p>
 
         {c.status !== "PASSED" && (
           <button
@@ -323,7 +354,7 @@ function ChallengeCard({
 
       {/* Inline expansion */}
       {expanded && (
-        <InlinePanel challenge={c} onClose={onToggle} />
+        <InlinePanel challenge={c} onClose={onToggle} onReadinessUpdate={onReadinessUpdate} />
       )}
     </div>
   );
@@ -351,12 +382,45 @@ export default function Challenge() {
   const [filter, setFilter] = useState<"All" | ChallengeType>("All");
   const [readBar, setReadBar] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const localReadiness = useMemo(
+    () => (report ? readinessFromChallenges(report.challenges) : null),
+    [report],
+  );
+  const [readiness, setReadiness] = useState<Readiness | null>(localReadiness);
+  const [readinessLoading, setReadinessLoading] = useState(false);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (localReadiness) setReadiness(localReadiness);
+  }, [localReadiness]);
+
+  async function refreshReadiness(runTest = false) {
+    if (!result?.productId || readinessLoading) return;
+    setReadinessLoading(true);
+    setReadinessError(null);
+    try {
+      const response = runTest
+        ? await runStressTest(result.productId)
+        : await getReadiness(result.productId);
+      setReadiness(normalizeReadiness(response.readiness));
+    } catch {
+      setReadinessError("Readiness could not be updated. Your previous score is still shown.");
+    } finally {
+      setReadinessLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (result?.productId) void refreshReadiness(true);
+    // Run once for the product that opened this page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result?.productId]);
 
   useEffect(() => {
     if (!report) return;
-    const t = setTimeout(() => setReadBar(report.readiness), 300);
+    const t = setTimeout(() => setReadBar(readiness?.total_score ?? 0), 300);
     return () => clearTimeout(t);
-  }, [report]);
+  }, [report, readiness?.total_score]);
 
   if (!report) return null;
 
@@ -365,9 +429,18 @@ export default function Challenge() {
       ? report.challenges
       : report.challenges.filter((c) => c.type === filter);
 
+  const totalScore = readiness?.total_score ?? 0;
   const readColor =
-    report.readiness >= 70 ? "#4ade80" :
-    report.readiness >= 45 ? "#f59e0b" : "#f87171";
+    totalScore >= 70 ? "#4ade80" :
+    totalScore >= 45 ? "#f59e0b" : "#f87171";
+
+  const dimensions = readiness ? [
+    { label: "Stress-Test Performance", value: readiness.stress_test, prominent: true, notTested: readiness.stress_test.total === 0 },
+    { label: "Product Information", value: readiness.product_information },
+    { label: "Context & Use Cases", value: readiness.context_use_case },
+    { label: "Consumer & Persona Fit", value: readiness.consumer_persona },
+    { label: "Consistency & Reliability", value: readiness.consistency_reliability },
+  ] : [];
 
   function toggleExpand(id: number) {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -537,7 +610,7 @@ export default function Challenge() {
           <div className="term-readiness">
             <p className="term-section-label">AI Readiness</p>
             <p className="term-score" style={{ color: readColor }}>
-              {report.readiness}{" "}
+              {totalScore}{" "}
               <span style={{ fontSize: 16, color: "var(--color-text-dim)" }}>/ 100</span>
             </p>
             <div style={{ height: 3, background: "#1e2230", borderRadius: 1, marginBottom: 14 }}>
@@ -549,11 +622,21 @@ export default function Challenge() {
                 }}
               />
             </div>
-            <div className="term-stats">
-              <span style={{ color: "#4ade80" }}>{report.passed} {STATUS_SYMBOL.PASSED} Passed</span>
-              <span style={{ color: "#f59e0b" }}>{report.partial} {STATUS_SYMBOL.PARTIAL} Partial</span>
-              <span style={{ color: "#f87171" }}>{report.failed} {STATUS_SYMBOL.FAILED} Failed</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+              {dimensions.map(({ label, value, prominent, notTested }) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 16, padding: prominent ? "9px 10px" : "0 10px", background: prominent ? "#ffffff08" : "transparent", borderLeft: prominent ? `2px solid ${readColor}` : "2px solid transparent", fontFamily: "var(--font-mono)", fontSize: prominent ? 13 : 12, color: prominent ? "var(--color-text)" : "var(--color-text-dim)" }}>
+                  <span>{label}</span>
+                  <span>{notTested ? "Not tested" : `${Math.round(value.score)} / ${value.max_score}`}</span>
+                </div>
+              ))}
             </div>
+            <div className="term-stats">
+              <span style={{ color: "#4ade80" }}>{readiness?.stress_test.passed ?? 0} {STATUS_SYMBOL.PASSED} Passed</span>
+              <span style={{ color: "#f59e0b" }}>{readiness?.stress_test.partial ?? 0} {STATUS_SYMBOL.PARTIAL} Partial</span>
+              <span style={{ color: "#f87171" }}>{readiness?.stress_test.failed ?? 0} {STATUS_SYMBOL.FAILED} Failed</span>
+            </div>
+            {readinessLoading && <p aria-live="polite" style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--color-text-dim)", margin: "12px 0 0" }}>Updating readiness...</p>}
+            {readinessError && <div role="alert" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 12 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "#f87171" }}>{readinessError}</span><button className="term-btn" disabled={readinessLoading} onClick={() => void refreshReadiness()} style={{ color: "var(--color-accent)", borderColor: "var(--color-accent)" }}>[ Retry ]</button></div>}
           </div>
 
           {/* Filters */}
@@ -579,6 +662,7 @@ export default function Challenge() {
                 index={i}
                 expanded={expandedId === c.id}
                 onToggle={() => toggleExpand(c.id)}
+                onReadinessUpdate={setReadiness}
               />
             ))}
           </div>

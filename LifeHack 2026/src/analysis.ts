@@ -639,6 +639,7 @@ export type ScoreCategory = {
 };
 
 export type AnalysisResult = {
+  productId?: string;
   overall: number;
   grade: string;
   categories: ScoreCategory[];

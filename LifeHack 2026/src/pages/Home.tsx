@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router";
 import { analyzeDescription } from "../analysis";
+import { analyzeProduct } from "../services/api";
 
 export default function Home() {
   const [input, setInput] = useState("");
@@ -35,24 +36,12 @@ export default function Home() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/api/analyze", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ json_input: input }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to analyze product JSON");
-      }
-
-      const data = await response.json();
+      const data = await analyzeProduct(input);
 
       // Navigate to results page with backend response
       navigate("/results", { 
         state: { 
-          result: data.result, 
+          result: { ...(data.result as object), productId: data.product_id },
           description: input 
         } 
       });
