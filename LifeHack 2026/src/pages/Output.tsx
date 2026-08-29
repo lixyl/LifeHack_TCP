@@ -260,27 +260,16 @@ export default function Output() {
           ))}
         </div>
 
-        {/* Refined description */}
+        {/* Question-answer context prepared for descriptor generation */}
         <div className="out-card out-full" style={{ animation: "fadeUp 0.4s ease 0.14s both" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-            <p className="out-label" style={{ margin: 0 }}>Full Appended Description</p>
+            <p className="out-label" style={{ margin: 0 }}>Refined Description</p>
             <div style={{ display: "flex", gap: 10 }}>
-              <CopyButton text={refined} />
+              <CopyButton text={questionAnswerString} />
               <button onClick={handleReAnalyze} className="btn-refine">
                 <span>↻</span> Refine further
               </button>
             </div>
-          </div>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--color-text)", lineHeight: 1.8, margin: 0, whiteSpace: "pre-wrap" }}>
-            {refined}
-          </p>
-        </div>
-
-        {/* Question-answer context prepared for descriptor generation */}
-        <div className="out-card out-full" style={{ animation: "fadeUp 0.4s ease 0.18s both" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-            <p className="out-label" style={{ margin: 0 }}>Clarification Answers</p>
-            <CopyButton text={questionAnswerString} />
           </div>
           <pre style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text)", lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
             {questionAnswerString}
