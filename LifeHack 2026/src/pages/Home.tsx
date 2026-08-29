@@ -168,6 +168,22 @@ export default function Home() {
         .dot-2 { animation: pulse-dot 1.2s ease-in-out infinite 0.2s; }
         .dot-3 { animation: pulse-dot 1.2s ease-in-out infinite 0.4s; }
         textarea:focus { outline: none; }
+        .info-tab { position: relative; display: inline-flex; margin-top: 16px; }
+        .info-tooltip {
+          position: absolute; z-index: 20; left: 50%; bottom: calc(100% + 10px);
+          width: min(360px, calc(100vw - 48px)); padding: 14px 16px;
+          border: 1px solid var(--color-border); border-radius: 12px;
+          background: var(--color-surface-2); color: var(--color-text);
+          font-family: var(--font-body); font-size: 12px; line-height: 1.65;
+          text-align: left; box-shadow: 0 12px 30px rgba(0,0,0,0.28);
+          opacity: 0; visibility: hidden; pointer-events: none;
+          transform: translate(-50%, 6px);
+          transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s;
+        }
+        .info-tab:hover .info-tooltip,
+        .info-tab:focus-within .info-tooltip {
+          opacity: 1; visibility: visible; transform: translate(-50%, 0);
+        }
       `}</style>
 
       {/* Hidden File Input */}
@@ -221,6 +237,27 @@ export default function Home() {
           Paste any product description or upload a JSON-LD file below. We'll score its clarity,
           completeness, persuasiveness, SEO strength, and LLM discoverability — instantly.
         </p>
+        <div className="info-tab">
+          <button
+            type="button"
+            aria-label="Why AI shopping readiness matters"
+            aria-describedby="ai-shopping-info"
+            style={{
+              width: 26, height: 26, borderRadius: "50%",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-surface-2)", color: "var(--color-accent)",
+              fontFamily: "var(--font-mono)", fontSize: 13, cursor: "help",
+            }}
+          >
+            i
+          </button>
+          <div id="ai-shopping-info" role="tooltip" className="info-tooltip">
+            AI shopping assistants are reshaping e-commerce. But most product descriptions
+            aren't written for machine understanding—they're written for human eyes. We helps
+            brands adapt. We analyze your product data, identify gaps, and guide you through
+            creating content that AI agents can confidently recommend.
+          </div>
+        </div>
       </div>
 
       {/* Input card with Drag & Drop */}
