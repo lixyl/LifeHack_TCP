@@ -101,6 +101,54 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function HighlightedAdditions({ original, updated }: { original: string; updated: string }) {
+  const tokenize = (value: string) => value.match(/\s+|\S+/g) ?? [];
+  const normalize = (token: string) =>
+    token.toLocaleLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+  const remainingOriginalTokens = new Map<string, number>();
+
+  for (const token of tokenize(original)) {
+    const normalized = normalize(token);
+    if (normalized) {
+      remainingOriginalTokens.set(
+        normalized,
+        (remainingOriginalTokens.get(normalized) ?? 0) + 1,
+      );
+    }
+  }
+
+  return (
+    <>
+      {tokenize(updated).map((token, index) => {
+        if (/^\s+$/.test(token)) return token;
+        const normalized = normalize(token);
+        const remaining = normalized ? remainingOriginalTokens.get(normalized) ?? 0 : 1;
+        if (normalized && remaining > 0) {
+          remainingOriginalTokens.set(normalized, remaining - 1);
+        }
+        const isAdded = Boolean(normalized) && remaining === 0;
+        return isAdded ? (
+          <mark
+            key={index}
+            title="Newly added text"
+            style={{
+              color: "#d1fae5",
+              background: "#10b98135",
+              borderBottom: "1px solid #34d399",
+              borderRadius: 3,
+              padding: "1px 2px",
+            }}
+          >
+            {token}
+          </mark>
+        ) : (
+          <span key={index}>{token}</span>
+        );
+      })}
+    </>
+  );
+}
+
 // ── Grade badge ───────────────────────────────────────────────────────────────
 function GradeBadge({ grade, score, label }: { grade: string; score: number; label: string }) {
   const color = score >= 85 ? "#4ade80" : score >= 70 ? "#7c6aff" : score >= 55 ? "#f59e0b" : "#f87171";
@@ -268,7 +316,12 @@ export default function Output() {
         {/* Question-answer context prepared for descriptor generation */}
         <div className="out-card out-full" style={{ animation: "fadeUp 0.4s ease 0.14s both" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-            <p className="out-label" style={{ margin: 0 }}>Refined Description</p>
+            <div>
+              <p className="out-label" style={{ margin: 0 }}>Refined Description</p>
+              <p style={{ margin: "5px 0 0", fontFamily: "var(--font-mono)", fontSize: 10, color: "#34d399" }}>
+                Highlighted text was added during refinement
+              </p>
+            </div>
             <div style={{ display: "flex", gap: 10 }}>
               <CopyButton text={questionAnswerString} />
               <button onClick={handleReAnalyze} className="btn-refine">
@@ -277,7 +330,7 @@ export default function Output() {
             </div>
           </div>
           <pre style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text)", lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-            {questionAnswerString}
+            <HighlightedAdditions original={original ?? ""} updated={questionAnswerString} />
           </pre>
         </div>
 
