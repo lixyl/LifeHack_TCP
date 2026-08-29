@@ -54,7 +54,16 @@ The product's main benefits, unique selling points, advantages, trade-offs, and 
 
 ## STEP 4 — GENERATE QUESTIONS
 
-Generate 8–10 questions. Each question must:
+You MUST generate EXACTLY 10 questions. 
+
+To ensure thorough evaluation, balance your generated questions across all 5 focus areas outlined in Step 3:
+- Generate 2 questions for **context** (`q1`, `q2`)
+- Generate 2 questions for **product_attribute** (`q3`, `q4`)
+- Generate 2 questions for **special_scenarios** (`q5`, `q6`)
+- Generate 2 questions for **personas** (`q7`, `q8`)
+- Generate 2 questions for **benefits** (`q9`, `q10`)
+
+Each question must:
 
 * Address information that is missing, unclear, or ambiguous.
 * Be important to a purchase or recommendation decision.
@@ -93,6 +102,7 @@ Return only one valid JSON object as a JSON-formatted string.
 * Do not include commentary before or after the JSON.
 * Use double quotes for all keys and string values.
 * Do not include trailing commas.
+* The `questions` array MUST contain EXACTLY 10 question objects. Outputting fewer or more than 10 questions is strictly invalid.
 * Keep `questions` as a JSON array and each question's `options` as its own JSON array.
 * Use `null` for `numeric_config` on multiple-choice questions.
 * Do not invent product information in the output.
@@ -155,6 +165,3 @@ Use this exact structure:
     }
   ]
 }
-```
-
-The JSON example defines the schema only. Replace all placeholders and do not copy its sample product facts unless they are appropriate for the provided product information.

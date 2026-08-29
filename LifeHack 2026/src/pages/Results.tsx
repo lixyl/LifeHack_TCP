@@ -57,7 +57,7 @@ function ScoreBar({
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
+          justifySpaceBetween: "space-between",
           marginBottom: 7,
         }}
       >
@@ -251,6 +251,9 @@ export default function Results() {
     description: string;
   };
 
+  // State to track user responses per question
+  const [answers, setAnswers] = useState<Record<string | number, string>>({});
+
   // Redirect home if landed without data
   useEffect(() => {
     if (!result) navigate("/", { replace: true });
@@ -293,6 +296,45 @@ export default function Results() {
   }, [result]);
 
   if (!result) return null;
+
+  // Handlers for user choices
+  const handleSelectOption = (questionKey: string | number, optionLabel: string) => {
+    setAnswers((prev) => ({ ...prev, [questionKey]: optionLabel }));
+  };
+
+  const handleInputChange = (questionKey: string | number, value: string) => {
+    setAnswers((prev) => ({ ...prev, [questionKey]: value }));
+  };
+
+  const exportToFile = () => {
+    const lines = [
+      `PRODUCT ANALYSIS RESPONSE REPORT`,
+      `Category: ${categoryName}`,
+      `Overall Score: ${result.overall ?? confidenceScore}`,
+      `Date: ${new Date().toLocaleString()}`,
+      `--------------------------------------------------\n`,
+    ];
+
+    questions.forEach((q, idx) => {
+      const qKey = q.id || idx;
+      const userAns = answers[qKey] || "[No answer provided]";
+      lines.push(`Q${idx + 1}: ${q.question}`);
+      lines.push(`Category: ${q.category} | Priority: ${q.priority}`);
+      lines.push(`Answer: ${userAns}`);
+      lines.push(``);
+    });
+
+    const fileContent = lines.join("\n");
+    const blob = new Blob([fileContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `clarification_answers_${Date.now()}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const preview =
     description && description.length > 180
@@ -608,78 +650,121 @@ export default function Results() {
             Clarification Questions ({questions.length})
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {questions.map((q, idx) => (
-              <div key={q.id || idx} className="card" style={{ padding: "20px 24px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--color-text-dim)", textTransform: "uppercase" }}>
-                    {q.category.replace("_", " ")}
-                  </span>
-                  <PriorityBadge priority={q.priority} />
-                </div>
+            {questions.map((q, idx) => {
+              const qKey = q.id || idx;
+              const selectedValue = answers[qKey] || "";
 
-                <h4 style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--color-text)", margin: "0 0 6px 0" }}>
-                  {q.question}
-                </h4>
+              return (
+                <div key={qKey} className="card" style={{ padding: "20px 24px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--color-text-dim)", textTransform: "uppercase" }}>
+                      {q.category.replace("_", " ")}
+                    </span>
+                    <PriorityBadge priority={q.priority} />
+                  </div>
 
-                <p style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--color-text-dim)", margin: "0 0 14px 0" }}>
-                  <strong style={{ color: "var(--color-text)" }}>Why it matters: </strong>
-                  {q.why_it_matters}
-                </p>
+                  <h4 style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--color-text)", margin: "0 0 6px 0" }}>
+                    {q.question}
+                  </h4>
 
-                {q.answer_type === "multiple_choice" && q.options && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {q.options.map((opt, i) => (
-                      <span
-                        key={i}
+                  <p style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--color-text-dim)", margin: "0 0 14px 0" }}>
+                    <strong style={{ color: "var(--color-text)" }}>Why it matters: </strong>
+                    {q.why_it_matters}
+                  </p>
+
+                  {q.answer_type === "multiple_choice" && q.options && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {q.options.map((opt, i) => {
+                        const isSelected = selectedValue === opt.label;
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => handleSelectOption(qKey, opt.label)}
+                            style={{
+                              fontFamily: "var(--font-mono)",
+                              fontSize: 11,
+                              color: isSelected ? "#fff" : "var(--color-text-dim)",
+                              background: isSelected ? "var(--color-accent)" : "var(--color-surface-2)",
+                              border: isSelected ? "1px solid var(--color-accent)" : "1px solid var(--color-border)",
+                              borderRadius: 8,
+                              padding: "6px 12px",
+                              cursor: "pointer",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {q.answer_type === "number" && q.numeric_config && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <input
+                        type="number"
+                        placeholder={`Enter value (${q.numeric_config.unit})`}
+                        value={selectedValue}
+                        onChange={(e) => handleInputChange(qKey, e.target.value)}
                         style={{
                           fontFamily: "var(--font-mono)",
-                          fontSize: 11,
-                          color: "var(--color-text-dim)",
+                          fontSize: 12,
+                          color: "var(--color-text)",
                           background: "var(--color-surface-2)",
                           border: "1px solid var(--color-border)",
                           borderRadius: 8,
-                          padding: "4px 10px",
+                          padding: "6px 12px",
+                          outline: "none",
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 11,
+                          color: "var(--color-accent)",
                         }}
                       >
-                        {opt.label}
+                        Unit: <strong>{q.numeric_config.unit}</strong>
                       </span>
-                    ))}
-                  </div>
-                )}
-
-                {q.answer_type === "number" && q.numeric_config && (
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 11,
-                      color: "var(--color-accent)",
-                      background: "var(--color-surface-2)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: 8,
-                      padding: "6px 12px",
-                      display: "inline-block",
-                    }}
-                  >
-                    Expected unit: <strong>{q.numeric_config.unit}</strong>
-                  </div>
-                )}
-              </div>
-            ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* ── CTA: Challenge Lab ── */}
+        {/* ── CTA: Challenge Lab & Save Answers ── */}
         <div
           className="col-full"
           style={{
             animation: "fadeUp 0.4s ease 0.3s both",
             display: "flex",
             justifyContent: "flex-end",
+            gap: 12,
             marginTop: 10,
           }}
         >
           <button
-            onClick={() => navigate("/challenge", { state: { result, description } })}
+            onClick={exportToFile}
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 13,
+              background: "var(--color-surface-2)",
+              color: "var(--color-text)",
+              border: "1px solid var(--color-border)",
+              borderRadius: 10,
+              padding: "12px 20px",
+              cursor: "pointer",
+              letterSpacing: "0.04em",
+              transition: "opacity 0.15s, transform 0.1s",
+            }}
+          >
+            Save Selections (.txt)
+          </button>
+          <button
+            onClick={() => navigate("/challenge", { state: { result, description, userAnswers: answers } })}
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: 13,
