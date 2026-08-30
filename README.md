@@ -31,12 +31,21 @@ LENNUT evaluates product information from the perspective of an AI shopping assi
 
 The system:
 
-1. Analyses the provided product information.
+1. Analyses the provided product information in the JSON-LD Format.
 2. Identifies missing, unclear, or ambiguous information.
 3. Generates targeted clarification questions.
 4. Allows the product owner to provide additional information.
 5. Re-evaluates the updated product information.
 6. Calculates an AI Readiness Score out of 100.
+
+---
+
+## Usage Procedure
+
+1. Create a txt file named "api_key.txt" and enter your API key for your LLM model
+2. Set up Python virtual environment, and run `uvicorn main:app --reload --port 8000` in the main project folder for backend API
+3. Run `npm run dev` in the `lennut-frontend` folder to activate the web server
+4. Go to `localhost:8443` on your browser to access the webpage
 
 ---
 
