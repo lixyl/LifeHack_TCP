@@ -7,7 +7,7 @@ type OutputState = {
   originalResult: AnalysisResult;
   refined: string;
   refinedResult: AnalysisResult;
-  questionAnswerString: string;
+  questionAnswerString?: string;
 };
 
 // ── Delta bar ─────────────────────────────────────────────────────────────────
@@ -173,47 +173,42 @@ export default function Output() {
     originalResult,
     refined,
     refinedResult,
-    questionAnswerString = "[]",
+    questionAnswerString,
   } = state;
 
   useEffect(() => {
-    if (!original && !refined) navigate("/", { replace: true });
-  }, [original, refined, navigate]);
+    if ((!original && !refined) || !originalResult || !refinedResult) {
+      navigate("/", { replace: true });
+    }
+  }, [original, refined, originalResult, refinedResult, navigate]);
 
-  if (!original && !refined) return null;
+  if ((!original && !refined) || !originalResult || !refinedResult) return null;
 
   const COLORS = ["#7c6aff", "#22d3ee", "#f472b6", "#34d399", "#fb923c"];
+  const outputText = questionAnswerString || refined;
 
-  const origScore = originalResult?.overall ?? 60;
-  const origGrade = originalResult?.grade ?? "C";
-  const refScore = refinedResult?.overall ?? Math.min(100, origScore + 25);
-  const refGrade = refinedResult?.grade ?? (refScore >= 85 ? "A" : "B");
+  const origScore = originalResult.overall;
+  const origGrade = originalResult.grade;
+  const refScore = refinedResult.overall;
+  const refGrade = refinedResult.grade;
 
-  const categories = refinedResult?.categories ?? [
-    { label: "Context", score: 85 },
-    { label: "Scenarios", score: 80 },
-    { label: "Personas", score: 75 },
-    { label: "Attributes", score: 90 },
-    { label: "Benefits", score: 85 },
-  ];
+  const categories = refinedResult.categories;
 
-  const origCategories = originalResult?.categories ?? categories.map(c => ({ ...c, score: Math.max(30, c.score - 20) }));
+  const origCategories = originalResult.categories;
 
   // Keep the bottom discoverability reading synchronized with the updated
   // LLM Fit category rendered in the score comparison above.
   const llmScore =
     categories.find(
       (category) => category.label.toLowerCase().replace(/[^a-z]/g, "") === "llmfit"
-    )?.score ?? refinedResult?.llmScore ?? refScore;
-  const llmVerdict = refinedResult?.llmVerdict ?? (llmScore >= 75 ? "High Clarity" : "Moderate Gap");
-  const llmRationale = refinedResult?.llmRationale ?? "The appended answers resolved critical ambiguity for edge cases.";
+    )?.score ?? refinedResult.llmScore;
+  const llmVerdict = refinedResult.llmVerdict;
+  const llmRationale = refinedResult.llmRationale;
 
   // Handler to run analysis again using the new refined text
   function handleReAnalyze() {
     const descriptionToRefine =
-      questionAnswerString && questionAnswerString !== "[]"
-        ? questionAnswerString
-        : refined || original;
+      outputText || original;
 
     navigate("/", {
       state: {
@@ -309,7 +304,7 @@ export default function Output() {
             <DeltaBar
               key={cat.label}
               label={cat.label}
-              before={origCategories[i]?.score ?? 50}
+              before={origCategories[i].score}
               after={cat.score}
               color={COLORS[i % COLORS.length]}
               delay={i * 80}
@@ -327,14 +322,14 @@ export default function Output() {
               </p>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <CopyButton text={questionAnswerString} />
+              <CopyButton text={outputText} />
               <button onClick={handleReAnalyze} className="btn-refine">
                 <span>↻</span> Refine further
               </button>
             </div>
           </div>
           <pre style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text)", lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-            <HighlightedAdditions original={original ?? ""} updated={questionAnswerString} />
+            <HighlightedAdditions original={original ?? ""} updated={outputText} />
           </pre>
         </div>
 

@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import type { AnalysisResult } from "../analysis";
+import { normalizeResult } from "../resultNormalizer";
 
 // Priority badge mapping
 function PriorityBadge({ priority }: { priority: string }) {
@@ -253,9 +254,7 @@ export default function Results() {
   const [currentDescription, setCurrentDescription] = useState(
     initialData.description || ""
   );
-  const [currentResult, setCurrentResult] = useState<AnalysisResult>(
-    initialData.result
-  );
+  const currentResult = initialData.result;
 
   const [answers, setAnswers] = useState<Record<string | number, string>>({});
   const [customText, setCustomText] = useState<Record<string | number, string>>({});
@@ -282,7 +281,8 @@ export default function Results() {
     return () => clearTimeout(t);
   }, [currentResult, categories]);
 
-  // Recalculates description and refined scores automatically on answer change
+  // Update the preview only. Scores stay fixed until the completed JSON is
+  // submitted to the evaluator.
   const updateRefinedState = (
     newAnswers: Record<string | number, string>,
     newCustomText: Record<string | number, string>
@@ -308,26 +308,6 @@ export default function Results() {
       answeredCount > 0 ? `${baseDescription}${appendedDetails}` : baseDescription
     );
 
-    // Dynamic score boost scaled by answered questions
-    const boost = answeredCount * 5;
-    const boostedCategories = (initialData.result?.categories ?? []).map((cat) => ({
-      ...cat,
-      score: Math.min(100, cat.score + boost),
-    }));
-    const newOverall = Math.min(
-      100,
-      Math.round(
-        boostedCategories.reduce((acc, c) => acc + c.score, 0) /
-          (boostedCategories.length || 1)
-      )
-    );
-
-    setCurrentResult((prev) => ({
-      ...prev,
-      overall: newOverall,
-      grade: newOverall >= 85 ? "A" : newOverall >= 70 ? "B" : "C",
-      categories: boostedCategories,
-    }));
   };
 
   const handleSelectOption = (questionKey: string | number, optionVal: string) => {
@@ -392,6 +372,7 @@ export default function Results() {
           body: JSON.stringify({
             json_input: initialData.description,
             clarification_answers: clarificationAnswers,
+            original_scores: initialData.result.scores,
           }),
         }
       );
@@ -403,13 +384,17 @@ export default function Results() {
       if (typeof data.generated_json !== "string") {
         throw new Error("The description API returned an invalid response");
       }
+      const refinedResult = normalizeResult({
+        scores: data.scores,
+        product_category: initialData.result.product_category,
+      });
 
       navigate("/output", {
         state: {
           original: initialData.description,
           originalResult: initialData.result,
-          refined: currentDescription,
-          refinedResult: currentResult,
+          refined: data.generated_json,
+          refinedResult,
           questionAnswerString: data.generated_json,
         },
       });
