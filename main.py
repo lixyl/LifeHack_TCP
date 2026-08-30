@@ -19,8 +19,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OPENAI_API_KEY = "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"
-client = OpenAI(api_key=OPENAI_API_KEY)
+BASE_DIR = Path(__file__).resolve().parent
+API_KEY_PATH = BASE_DIR / "api_key.txt"
+
+
+def load_api_key() -> str:
+    try:
+        api_key = API_KEY_PATH.read_text(encoding="utf-8").strip()
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            f"Missing {API_KEY_PATH.name}. Create it in the project root and paste your OpenAI API key into it."
+        ) from exc
+
+    if not api_key or api_key == "PASTE_YOUR_OPENAI_API_KEY_HERE":
+        raise RuntimeError(
+            f"Add your OpenAI API key to {API_KEY_PATH.name} before starting the backend."
+        )
+
+    return api_key
+
+
+client = OpenAI(api_key=load_api_key())
 
 SCORE_KEYS = (
     "Clarity",

@@ -1,1 +1,0 @@
-# LifeHack (Totally Clueless Programmers)

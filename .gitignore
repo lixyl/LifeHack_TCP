@@ -65,6 +65,7 @@ cache/
 
 # Custom Files
 sample.json
+api_key.txt
 
 # IDEs and Editors
 .vscode/
