@@ -1,4 +1,4 @@
-# figma-make-app
+# Lennut
 
 React + Vite + Tailwind CSS project running inside Figma Make.
 

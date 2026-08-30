@@ -51,7 +51,7 @@ export default function Root() {
               letterSpacing: "0.08em",
             }}
           >
-            NARRATIV
+            LENNUT
           </span>
         </div>
         <div
@@ -90,7 +90,7 @@ export default function Root() {
             margin: 0,
           }}
         >
-          NARRATIV · Brand Content Intelligence · v0.1
+          LENNUT · Brand Content Intelligence · v0.1
         </p>
       </footer>
     </div>
