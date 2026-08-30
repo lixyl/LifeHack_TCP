@@ -8,7 +8,6 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import type { AnalysisResult } from "../analysis";
-import { normalizeResult } from "../resultNormalizer";
 
 // Priority badge mapping
 function PriorityBadge({ priority }: { priority: string }) {
@@ -354,14 +353,18 @@ export default function Results() {
       return [{ question: question.question, answer }];
     });
 
-    return JSON.stringify(pairs);
+    return {
+      serialized: JSON.stringify(pairs),
+      selectedOptionCount: pairs.length,
+    };
   };
 
   const handleGenerateOutput = async () => {
     if (isGenerating) return;
 
     setIsGenerating(true);
-    const clarificationAnswers = serializeQuestionAnswers();
+    const { serialized: clarificationAnswers, selectedOptionCount } =
+      serializeQuestionAnswers();
 
     try {
       const response = await fetch(
@@ -372,7 +375,6 @@ export default function Results() {
           body: JSON.stringify({
             json_input: initialData.description,
             clarification_answers: clarificationAnswers,
-            original_scores: initialData.result.scores,
           }),
         }
       );
@@ -384,18 +386,13 @@ export default function Results() {
       if (typeof data.generated_json !== "string") {
         throw new Error("The description API returned an invalid response");
       }
-      const refinedResult = normalizeResult({
-        scores: data.scores,
-        product_category: initialData.result.product_category,
-      });
-
       navigate("/output", {
         state: {
           original: initialData.description,
           originalResult: initialData.result,
           refined: data.generated_json,
-          refinedResult,
           questionAnswerString: data.generated_json,
+          selectedOptionCount,
         },
       });
     } catch (error) {

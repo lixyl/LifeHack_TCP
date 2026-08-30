@@ -42,7 +42,6 @@ class RefineRequest(BaseModel):
 class GenerateDescriptionRequest(BaseModel):
     json_input: str
     clarification_answers: str
-    original_scores: dict[str, int]
 
 
 def generate_questions(json_input: str, instructions_filename: str = "instructions.md") -> Any:
@@ -126,25 +125,6 @@ def generate_scores(json_input: str, instructions_filename: str = "instructions1
     return parse_scores(content)
 
 
-def prevent_score_regression(
-    new_scores: dict[str, int], original_scores: dict[str, int]
-) -> dict[str, int]:
-    """Keep every refined metric at or above its original evaluated score."""
-    missing = [key for key in SCORE_KEYS if key not in original_scores]
-    invalid = [
-        key
-        for key in SCORE_KEYS
-        if key in original_scores and not 1 <= original_scores[key] <= 100
-    ]
-    if missing or invalid:
-        raise ValueError("Original scores are incomplete or invalid")
-
-    return {
-        key: max(new_scores[key], original_scores[key])
-        for key in SCORE_KEYS
-    }
-
-
 def generate_description_json(
     json_input: str,
     clarification_answers: str,
@@ -211,14 +191,9 @@ async def generate_description_endpoint(payload: GenerateDescriptionRequest):
             json_input=payload.json_input,
             clarification_answers=payload.clarification_answers,
         )
-        scores = prevent_score_regression(
-            generate_scores(generated_json),
-            payload.original_scores,
-        )
         return {
             "success": True,
             "generated_json": generated_json,
-            "scores": scores,
         }
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=400, detail=f"Invalid JSON input: {e}")

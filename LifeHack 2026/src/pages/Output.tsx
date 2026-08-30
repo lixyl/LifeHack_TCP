@@ -1,13 +1,14 @@
 import { useLocation, useNavigate } from "react-router";
 import { useEffect, useState } from "react";
-import type { AnalysisResult } from "../analysis";
+import type { AnalysisResult, EvaluationScores } from "../analysis";
+import { normalizeResult, scoreEntries } from "../resultNormalizer";
 
 type OutputState = {
   original: string;
   originalResult: AnalysisResult;
   refined: string;
-  refinedResult: AnalysisResult;
   questionAnswerString?: string;
+  selectedOptionCount?: number;
 };
 
 // ── Delta bar ─────────────────────────────────────────────────────────────────
@@ -172,20 +173,35 @@ export default function Output() {
     original,
     originalResult,
     refined,
-    refinedResult,
     questionAnswerString,
+    selectedOptionCount = 0,
   } = state;
 
   useEffect(() => {
-    if ((!original && !refined) || !originalResult || !refinedResult) {
+    if ((!original && !refined) || !originalResult) {
       navigate("/", { replace: true });
     }
-  }, [original, refined, originalResult, refinedResult, navigate]);
+  }, [original, refined, originalResult, navigate]);
 
-  if ((!original && !refined) || !originalResult || !refinedResult) return null;
+  if ((!original && !refined) || !originalResult) return null;
 
   const COLORS = ["#7c6aff", "#22d3ee", "#f472b6", "#34d399", "#fb923c"];
   const outputText = questionAnswerString || refined;
+
+  const answeredCount = Number.isFinite(selectedOptionCount)
+    ? Math.max(0, Math.floor(selectedOptionCount))
+    : 0;
+  const scoreBoost = answeredCount * 5;
+  const boostedScores = Object.fromEntries(
+    scoreEntries.map(([key]) => [
+      key,
+      Math.min(100, originalResult.scores[key] + scoreBoost),
+    ]),
+  ) as unknown as EvaluationScores;
+  const refinedResult = normalizeResult({
+    ...originalResult,
+    scores: boostedScores,
+  });
 
   const origScore = originalResult.overall;
   const origGrade = originalResult.grade;
@@ -203,7 +219,7 @@ export default function Output() {
       (category) => category.label.toLowerCase().replace(/[^a-z]/g, "") === "llmfit"
     )?.score ?? refinedResult.llmScore;
   const llmVerdict = refinedResult.llmVerdict;
-  const llmRationale = refinedResult.llmRationale;
+  const llmRationale = `${answeredCount} clarification ${answeredCount === 1 ? "answer" : "answers"} selected, adding ${scoreBoost} points to each score.`;
 
   // Handler to run analysis again using the new refined text
   function handleReAnalyze() {

@@ -1,4 +1,15 @@
-import { Outlet } from "react-router";
+import { useLayoutEffect } from "react";
+import { Outlet, useLocation } from "react-router";
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
 
 export default function Root() {
   return (
@@ -11,6 +22,7 @@ export default function Root() {
         flexDirection: "column",
       }}
     >
+      <ScrollToTop />
       {/* Header */}
       <header
         style={{
