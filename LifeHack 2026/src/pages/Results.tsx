@@ -546,39 +546,6 @@ export default function Results() {
               </RadarChart>
             </ResponsiveContainer>
           </div>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "8px 16px",
-              marginTop: 4,
-            }}
-          >
-            {categories.map((c) => (
-              <div
-                key={c.label}
-                style={{ display: "flex", alignItems: "center", gap: 6 }}
-              >
-                <div
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: c.color,
-                  }}
-                />
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 10,
-                    color: "var(--color-text-dim)",
-                  }}
-                >
-                  {c.label}
-                </span>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Score Bars */}
